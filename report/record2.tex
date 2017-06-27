@@ -1,0 +1,70 @@
+% -- 第１章作業記録(Linux) --
+\documentclass[a4j,titlepage]{jarticle}
+\usepackage[dvipdfmx]{graphicx}
+\usepackage{url}
+\usepackage{epsfig}
+\usepackage{ascmac}
+%\usepackage{here}
+
+\begin{document}
+
+\begin{itemize}
+\item sever のネットワーク設定の変更
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+　# vi /etc/network/interface
+\end{verbatim}
+    \end{screen}
+  \end{screen}　
+  　ネットワーク設定時において上記の中に設定した記述を以下のように編集する．
+
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+　# vi /etc/network/interface
+
+auto emp2s0
+iface emp2s0 inet static
+      address 172.21.19.2
+      netmask 255.255.255.0
+      gateway 172.21.19.1
+      dns-namesever 192.168.0.1
+      dns-search info.kochi-tech.ac.jp
+\end{verbatim}
+    \end{screen}
+  \end{screen}　
+
+\item 動作確認
+  ルーターに接続を行ったため，他のグループとも接続が可能になる．今回は，他のグループの 172.21.22.2 に ping を送信し，動作確認を行った．
+
+\begin{center}
+  \begin{screen}
+\begin{verbatim}
+# ping 172.21.22.2
+PING 172.21.22.2 (172.21.22.2) 56(84) bytes of data.
+From 172.21.19.2 icmp_s
+\end{verbatim}
+  \end{screen}
+\end{center}
+
+　また，traceroute コマンドを用いて正しい経路の元ネットワークが繋がれているか確認する．
+
+\begin{center}
+  \begin{screen}
+\begin{verbatim}
+[exp@localhost ~]$ ping 172.21.22.2
+PING 172.21.22.2 (172.21.22.2) 56(84) bytes of data.
+64 bytes from 172.21.19.2: imcp_seq=1 ttl=64 time=0.290 ms
+64 bytes from 172.21.19.2: imcp_seq=1 ttl=64 time=0.211 ms
+\end{verbatim}
+  \end{screen}
+\end{center}
+
+
+  
+\end{itemize}
+
+\newpage
+
+\end{document}
