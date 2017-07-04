@@ -1,0 +1,53 @@
+% -- 第3章作業記録(Windows7) --
+\documentclass[a4j,titlepage]{jarticle}
+\usepackage[dvipdfmx]{graphicx}
+\usepackage{url}
+\usepackage{epsfig}
+\usepackage{ascmac}
+%\usepackage{here}
+
+\begin{document}
+
+\subsection{Windows7のリゾルバ設定}
+Windows7 では，「コントールパネル」→「ネットワークとインターネット」→「ネットワークと共有センター」→「アダプターの設定」と順に選択し，用いているネットワークインターフェースのプロパティから，IPv4 の設定の項の DNS サーバを変更し，リゾルバの設定とする．
+
+\subsection{Windows7のMUAの設定}
+\begin{itemize}
+\item まず，以下をインストールし， Japanese を選択して Mozilla Thunderbird のセットアップを開始する．
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+　https://www.mozilla.org/en-US/thunderbird/all 
+\end{verbatim}
+    \end{screen}
+  \end{center}
+
+\item セットアップが完了すると新しいメールアカウント設定に進む．ここで，
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+  あなたのお名前：適当でいいがローマ字が無難
+  メールアドレス：ユーザ@gX.info.kochi-tech.ac.jp
+  パスワード：サーバで設定したパスワード
+\end{verbatim}
+    \end{screen}
+  \end{center}
+
+　これらを入力し，設定する(Xはグループ番号)．
+
+\item 入力が完了すると，以下の項目が表示される．
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+　受信サーバ： pop3, pop.gXinfo.kochi-tech.ac.jp
+　送信サーバ： SMTP, smtp.gXinfo.kochi-tech.ac.jp
+　ユーザ名：設定したユーザ名
+\end{verbatim}
+    \end{screen}
+  \end{center}
+
+　これらが合っているか確認をし，メールを送信して送信できたら完了となる．
+
+\end{itemize}
+
+\end{document}
