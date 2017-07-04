@@ -1,0 +1,821 @@
+\documentclass[a4j,titlepage]{jarticle}
+\usepackage[dvipdfmx]{graphicx}
+\usepackage{url}
+\usepackage{epsfig}
+\usepackage{ascmac}
+\usepackage{here}
+%
+\title{情報学群実験第4C 第2章レポート\\　ルータ・スイッチ}
+\author{学籍番号 1190358\\
+        畠山 友華\\
+        グループ9}
+\date{\today}
+%% プリアンブルここまで
+
+%% 本文
+\begin{document}
+\maketitle
+%% 目次をつける場合
+%\tableofcontents
+%\clearpage
+
+\section{目的}
+% 背景からの実験の目的を記述
+% --- 背景 ---
+様々なOS 環境が備わり活用されている現在，会社や組織でサーバとクライアントのコンピュータを用いて膨大な量のネットワーク通信とそれに伴う機密性のある情報のやり取りが行われている．\\
+　異なる組織に属する端末は，お互い異なるネットワーク部を持つ IP アドレスを持つため，通常1台以上のルータを介して通信を行う．膨大な量の情報を扱う大きな組織の場合には，管理上の理由によりネットワークを分割したい場合，物理的な距離の制限でデータリンク層にいるプロトコルでは距離が届かない場合，SMB などのブロードキャストを用いるプロトコルが，大きな LAN 全体に送信されることが望ましくない場合などによって組織内で更に LAN を分割するほうが良い．
+
+% --- 目的 ---
+しかし，近年ではイーサネットスイッチと長距離光イーサネットの普及で物理的な距離の制限をする必要がなくなり，1Gbps や 10Gbps の普及で帯域上の理由もあまりない．むしろ現在では，異なる組織間での通信がなるべく干渉のないように設定したい．このことを目的として，セキュリティ面においてサブネット分割や VLAN を用いて組織内で通信を行うことが多い．こうすることにより，同じスイッチ内でも異なるネットワークにすることが可能になり，セキュリティ面でも使用するケーブルや管理の手間などが省けるという利点がある．
+
+\section{内容}
+% 3つの実験の行う内容
+目的で示したように，中規模以上のネットワークを構築する際は，組織外からのセキュリティの強化などの面からネットワークをある程度分割するほうが良い．これより，ネットワークを分割するために必要なルータとスイッチの設定を行っていく．\\
+　Windows7 ラップトップコンピュータを用いて，コンソール端子からルータとのケーブル接続を行う．それから，各必要項目をインストールした後ターミナルエミュレータからルーティング設定を行っていく．各グループ(組織)でバックボーンと接続するルータで，静的にルーティングテーブルを構築し，次グループと他グループ及びバックボーンとの通信が行えるようにする．全端末が同一ネットワークに所属しており，実験室全体のネットワークに対してサブネット分割を行って，各グループごとにネットワークを分割する．ここで，クラスB のアドレスである 172.21.0.0/16 を256このサブネットに分割し，各ネットワークに割り当てる(図\ref{fig:subnet})．このように，これらのネットワークを構築し，各コンピュータで設定・正常に通信できるか動作確認を行う．
+　
+  \begin{figure}[htbp]
+    \begin{center}
+      \resizebox{115mm}{!}{\includegraphics{route.png}}
+      \caption{サブネット化後のネットワーク}
+     \label{fig:subnet}
+   \end{center}
+  \end{figure}
+
+  \newpage
+次に，スイッチにポート VLAN を用いて，1〜16番ポートは自分たちのグループの VLAN を，17〜20番ポートは別の１グループの VLAN を作成する．また，21番ポートには，自グループの VLAN と他グループの VLAN の両方を，IEEE 802.1q タグ VLAN で接続できるように設定する(図\ref{fig:vlan})．
+
+  \begin{figure}[htbp]
+    \begin{center}
+      \resizebox{115mm}{!}{\includegraphics{vlan.png}}
+      \caption{VLAN 接続図}
+     \label{fig:vlan}
+   \end{center}
+  \end{figure}
+
+\newpage
+\section{要素技術}
+ネットワーク接続を行う中で様々な技術が必要となってくる．その中で，「ルーティング」，「VLSM」，「VLAN」，「STP」について詳しく解説していく．
+
+\subsection{ルーティング}
+インターネットでは，ネットワークとネットワークがルータで接続されて作られている．パケットを正しく宛先ホストへ届けるためには，ルーターが正しい方向へパケットを転送しなければいけない．この「正しい方向」へパケットを転送するための処理を経路制御またはルーティングと呼ぶ．\\
+　ルータは，経路制御表(ルーティングテーブル)を参照してパケットを転送するため，受け取ったパケットの宛先 IP アドレスと経路制御表を比較して，次に送信すべきルーターを決定する．したがって，経路制御表には絶対に正しい情報が入っていなければならない．もし，間違っていた場合は，目的のホストにパケットが到達できなくなる\cite{bib:iptext}．
+
+\subsubsection{ルーティングテーブルの構築の種類}
+ルーティングテーブルの構築には，大きく分けて以下の2種類がある．
+\begin{description}
+\item[(1)スタティックルーティング(静的ルーティング)]\mbox{}\\
+　スタティックルーティングとは，ルータやホストに固定的に経路情報を設定する方法である．\\
+　スタティックルーティングの設定は通常，人間のてによって行われる．たとえば100個の IP ネットワークが存在したとすると，100近くの経路情報をそれぞれのルータに設定しなければならない．また，このネットワークに新たなネットワークが1つ追加される場合，追加したネットワークの情報を全てのルーターに設定しなければならない．このため，管理者に大きな負担がかかる．また，ネットワークに障害が発生したときには，管理者が手作業で設定を変更する必要がある\cite{bib:iptext}．
+
+\item[(2)ダイナミックルーティング(動的ルーティング)]\mbox{}\\
+　ダイナミックルーティングとは，動的ルーティングのことでルーティングプロトコルを動作させ，自動的に経路情報を設定することができる．\\
+　ダイナミックルーティングを利用する場合，ルーティングプロトコルを用いて，ルータが近隣のルータとルーティング情報を交換し，随時ルーティングテーブルの更新を行う．ルーティングテーブルはネットワークの変化に応じて，随時更新され変化していく．すなわちある経路が遮断されたら，ルーティングテーブルの経路が，別のルータを経由するように変更されるなどの処理が行われる．管理者は，近隣のルータの管理者と，用いるルーティングプロトコルや設定を調整し，ダイナミックルーティングプロトコルを用いる設定を行う．近隣のルータ同士で同一のルーティングテーブルプロトコルを用いることで，他のルータからルーティング情報を取得し，ルーティングテーブルは自動で更新する事ができる．
+\end{description}
+
+なお，スタティックルーティングとダイナミックルーティングは，どちらか一方しか利用できないわけではなく，組み合わせて利用することも可能である\cite{bib:iptext}．
+
+
+\subsection{VLSM}
+VLSM とは「Variable Length Subnet Mask」の略で，１つのネットワークをサブネット分割する際に，サブネットごとに異なる長さのマスク長を使用する方法である．例えば，ある１つのクラスB を分割するときに，「/28」と「/29」を同時に使用することが可能になる」．VLSM を用いたネットワークルーティングを使用する場合は，OSPF や RIP Version 2 などの VLSM  に対応したルーティングプロトコルを使う必要がある．しかし，RIP(RIP Version 1)は VLSM に対応していない．\\
+  　VLSM は１つのネットワークをサブネットに分割する際に異なる長さのマスク長を使用する方法である．したがって，くらすC で「/24」しか使えない場合には，「VLSM に対応していない」どころか「サブネットに対応していない」ということになる．また，VLSM に対応していなくても，あるクラスC　ネットワークでは「/28」でサブネットを構成し，他のクラスC ネットワークでは「/29」を構成するということは，VLSM 非対応のルータでも可能な場合が多い．あくまでも VLSM は，1つのネットワークをサブネットに分割する場合のみに異なる長さのマスク長を使用するという意味であるため注意する(図\ref{fig:vlsm})\cite{bib:routing}．
+
+  \begin{figure}[htbp]
+    \begin{center}
+      \resizebox{115mm}{!}{\includegraphics{vlsm.png}}
+      \caption{A社のネットワーク状況\cite{bib:routing}}
+     \label{fig:vlsm}
+   \end{center}
+  \end{figure}
+
+
+\begin{table}[htbp]
+\caption{適切なマスク長\cite{bib:routing}}
+\label{tab:routing}
+\begin{center}
+\begin{tabular}{lcc}
+\hline
+部署 & ホスト数 & マスク長\\ \hline \hline  
+総務部 & 21 & /27\\
+経理部 & 6 & /29\\
+営業部 & 101 & /25\\ 
+SE 部 &  51 & /26\\
+サーバセグメント & 4 & /29\\ \hline
+\end{tabular}
+\end{center}
+\end{table}
+
+
+\newpage
+\subsection{VLAN}
+VLAN(Virtual LAN:仮想 LAN) とは，スイッチでネットワークを分割する機能である．この VLAN を利用すると本来はルータ(またはL3スイッチ)で行われるブロードキャストドメインの分割を，スイッチで表現することができる．VLAN は，ルータで分割されたネットワークと同じように機能する．各 VLAN はそれぞれ1つのサブネットに対応する．このときブロードキャストドメインとは，ブロードキャストが届く範囲のことをいう．\\
+　VLAN には以下のようなメリットがある(表\ref{tab:vlan})．
+
+\begin{table}[htbp]
+\caption{VLAN のメリット\cite{bib:cisco}}
+\label{tab:vlan}
+\begin{center}
+\begin{tabular}{|l|l|}
+  \hline
+メリット & 役割 \\ \hline \hline
+通信効率の向上 & ブロードキャストドメインの分割によってフラッディングされる範囲が狭まり，\\ & ノード間の通信効率を高めることができる\\  \hline
+柔軟なネットワーク設計 & 物理的な接続とは関係なくユーザを\\
+ & 論理的なグループに形成できるため，柔軟にネットワーク設計をすることができる\\ \hline
+セキュリティの強化 & トラフィックをレイヤ2レベルで分離できるため，\\
+ & 異なる VLAN へのアクセスに関わるネットワークセキュリティを強化できる\\ \hline
+\end{tabular}
+\end{center}
+\end{table}
+
+VLAN の動作について，VLAN は VLAN ID と呼ばれる認識番号によって識別される．スイッチの全てのイーサネットボードにはデフォルトで VLAN1 が割り当てられており，ブロードキャストドメインは1つである．管理者は VLAN を新規作成し，特定のスイッチポートに VLAN を割り当てることによってブロードキャストフレームを受信すると，そのポートに VLAN を割り当てることによってブロードキャストドメインを分割する．\\
+　複数のスイッチにわたって VLAN を構成する場合，スイッチ同士を接続するポートはトランクポートとして設定する．\\
+　トランクポートは，複数の VLAN を割り当てて複数の VLAN フレームを転送することができる．他ランクポートから送信されるフレームには，タグと呼ばれる VLAN 識別情報が挿入される．フレームの受信側では，挿入されたタグを参照し，「どの VALN ポートにフレームを転送すべきか」を決定する．\\
+　図\ref{fig:vlan}で示したように，スイッチ間をトランクポートで接続すると，VLAN 数が多い場合でもスイッチ間を接続するためのスイッチポートは最低1つで済む．なお，1つの VLAN だけを割り当てて，1つの VLAN フレームのみを転送するポートをアクセスポートという．通常，エンドユーザのコンピュータを接続するポートはアクセスポートになる．
+
+\newpage
+  \subsection{STP}
+図\ref{fig:stp} より，クライアントコンピュータがサーバへアクセスするために，まず ARP リクエストを送信する．ARP リクエストはブロードキャストで送信される．ARP リクエストを受信したスイッチ2はブロードキャストであるため，入ってきたポート以外にフラッディングを行う．すると，スイッチ1もブロードキャストを受信するため，またフラッディングを行う．スイッチ1がフラッディングしたブロードキャストをスイッチ3が受信すると，これもフラッディングされてスイッチ2に戻ってしまう．スイッチ3には，もちろんスイッチ2からフラッディングされたブロードキャストも届くため，これもフラッディングされる．結局，スイッチ2にまたブロードキャストが戻ってくるが，戻ってきたブロードキャストもフラッディングし，スイッチ間をループしてしまう．このような状況をブロードキャストストームと呼ぶ．\\
+　このようにブロードキャストが発生してしまうと，ネットワークの帯域幅を使い切ってしまい，その他の通信を行うことができなくなってしまう．このようなブロードキャストストームを止めるためには，ケーブルを抜くかスイッチの電源を切ってしまうかしかない\cite{bib:network}．そこで，STP(Spaning Tree Protcol) と呼ばれるプロトコルを用いて，いくつかのポートを使用禁止にすることにより木構造を作りブロードキャストストームを防止させる事ができる．
+
+
+  \begin{figure}[htbp]
+    \begin{center}
+      \resizebox{115mm}{!}{\includegraphics{stp.png}}
+      \caption{ブロードキャストストーム\cite{bib:network}}
+     \label{fig:stp}
+   \end{center}
+  \end{figure}
+  
+
+\section{作業記録}
+　ここでは，すでに設定を行っているネットワークに加えて，ルータ・スイッチの設定に行うとともに，ネットワークに適した構成に各種コンピュータにて変更を行う．
+
+\subsection{コンソール}
+ルータとスイッチの設定は，コンソールを用いて行う．コンソールとは，キーボードやディスプレイなどの人間との入出力を行うディバイスであるが，ルータやスイッチなどの製品は，僅かなボタンやインジゲータしか備えておらず，初期設定を全てこれらのボタンで行うのは難しい．今回は，ルータ・スイッチ設定のためのコンソール用PC としてラップトップ PC である Windows7 を用いて行う．また，コンソールだけでは接続する個ができずシリアル端子である RS-232C の USB 変換シリアルを用いて接続を行っていく．
+
+% インターフェースとIPアドレスの設定情報
+\subsection{Cisco IOS ルータの設定方法}
+ルータと，Windows7をインストールしたノートPCをシリアル接続し，コンソール操作を行うことでネットワーク分割をする．そのために，まず，ノートPCでルータを操作をするためのターミナルエミュレータであり、フリーソフトウェアのPuttyをインストールする．次に，ルータとノートPCをシリアル接続する．その後、Puttyを起動し，ルータの操作をし，ルーティングを設定する．さらに，同ネットワークに接続する他のPCのネットワーク設定を変更する。最後に，ネットワーク設定を正常に行うことが出来たか動作確認をする。．
+
+\subsubsection{USB-シリアルコネクタデバイスインストール}
+ターミナルエミュレータであるPuttyのインストールの手順を以下に示す．
+
+\begin{enumerate}
+  
+\item インターネットブラウザのInternet Explorerを起動し、アドレスバーに
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+ftp://192.168.0.1/pub/Windows/putty-gdi-20120211.zip
+\end{verbatim}
+\end{center}
+\end{screen}
+と入力する。
+
+\item 次に出るウインドウで「保存(S)」をクリックし、日本語化パッチが含まれているPuttyをダウンロードする。
+
+\item ダウンロードが完了したら、そのファイルを展開する。
+
+\item 展開したフォルダの中の、ja-JPというフォルダ内にある全ファイルをputty.exeと同じところにコピーし、日本語化パッチをあてる。
+
+\end{enumerate}
+
+\subsubsection{USBシリアル接続を行うための設定}
+ノートPCとルータを接続し、Puttyでルータ操作をするために、USB-シリアルコネクタのデバイスインストールと、puttyの設定をする。
+
+\begin{enumerate}
+
+\item Internet Explorerのアドレスバーに
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+ftp://192.168.0.1/pub/drivers/usbrs232r_300v.exe
+\end{verbatim}
+\end{center}
+\end{screen}
+と入力する。
+
+\item ダウンロードしたusbrs232r\_300v.exeを実行し、展開先フォルダを「c:\yen corega」に指定して展開する。
+
+\item 展開したフォルダには32ビット版ドライバと64ビット版ドライバがあるが、ノートPCが32bitなので32ビット版ドライバを実行する。セットアッププログラムが起動されるので、「次へ(N)$>$」、「インストール」を選択する。新たなウインドウが表示されるので「インストール(I)」を選択する。最後に「完了」を選択する。USBシリアルを接続すると、デバイスインストールが完了し、COM3ポートがシリアル接続できるポートであると表示される。
+
+\item putty.exeを実行し、puttyを起動する。
+
+\item 設定画面が表示されるので、左のカテゴリーから「設定」内の「シリアル」をクリックし、ローカルシリアルポートの設定画面を表示する。その画面内の「接続先のシリアルポート」をCOM3に指定する。
+
+\item 左のカテゴリーから「接続」の中の「シリアル」をクリックし、ローカルシリアルポートの設定画面を表示する。その画面内の「接続先のシリアルポート」
+
+\item 左のカテゴリーから「セッション」の中の「ログ」をクリックし、セッションログの設定画面を表示する。その画面内の「セッションのログ」で「全セッション(L)」にチェックを入れる。また、「ログファイル名(F)」でログファイルの保存先を指定できるが、デスクトップに保存されるように変更した。
+
+\item 左のカテゴリーから「セッション」をクリックし、PuTTY セッションの基本設定画面を表示する。その画面内の「接続タイプ」で「Serial」にチェックを入れる。
+
+\item 8と同じ画面において、5～8のputtyの設定変更を次の起動時にも反映させるために、「セッション一覧(E)」の「Default Settings」をクリックし、「保存(V)」を選択する。
+
+\end{enumerate}
+
+\subsubsection{ターミナルエミュレータの設定}
+ダウンロードしたターミナルエミュレータである Putty を起動し以下のコマンドから設定を行う．
+
+\begin{enumerate}
+\item まず，今のままでは user として設定を行われるため，管理者権限に移り設定を行う必要がある．
+
+\begin{center}
+\begin{screen}
+\begin{verbatim}
+Router> enable
+\end{verbatim}
+\end{screen}
+\end{center}
+
+\item 以下のコマンドから設定モードに移る．
+
+\begin{center}
+\begin{screen}
+\begin{verbatim}
+Router#configure terminal
+\end{verbatim}
+\end{screen}
+\end{center}
+
+\item DNS の逆引きの設定を無効化する
+
+\begin{center}
+\begin{screen}
+\begin{verbatim}
+Router(config)#no ip domain lookup
+Router(config)#line con 0 
+\end{verbatim}
+\end{screen}
+\end{center}
+
+\item ログ表示とコマンド入力画面の分離を行い，console 画面の設定の終了を行う．
+
+\begin{center}
+\begin{screen}
+\begin{verbatim}
+Router(config-line)#logging synchronous
+Router(config-line)#exit
+\end{verbatim}
+\end{screen}
+\end{center}
+
+\item ユーザの追加と Cisco ユーザの削除を行う．
+
+\begin{center}
+\begin{screen}
+\begin{verbatim}
+Router(config)#username root privilege 15 secret 0 reeo00
+Router(config)#no username cisco
+\end{verbatim}
+\end{screen}
+\end{center}
+
+\item ホスト名の設定と設定確認を行う．
+\begin{center}
+\begin{screen}
+\begin{verbatim}
+Router(config)#hostname router9    (9はグループ名)
+router9(config)#exit
+router9#shw runnning-config
+\end{verbatim}
+\end{screen}
+\end{center}
+
+\item I/F の設定としてバックボーン側である FE0(FastEthernet0) と，コンピュータ側である FE1(FastEthernet1) の設定をそれぞれを行う．
+
+\begin{center}
+\begin{screen}
+\begin{verbatim}
+router9(config)#interface fastethernet 0               (FE0 の設定)
+router9(config-if)#ip address 192.168.0.19 255.255.255.0
+router9(config-if)#no shutdown
+
+router9(config)#interface fastethernet 1                (FE1 の設定)
+router9(config-if)#ip address 172.21.19.1 255.255.255.0
+router9(config-if)#no shutdown
+\end{verbatim}
+\end{screen}
+\end{center}
+
+\item ルーティングテーブルの登録を行う．
+
+  \begin{center}
+    \begin{screen}
+      \begin{verbatim}
+router9#show ip route
+Codes: C - connected, S - static, R - RIP, M - mobile, B - BGP
+       D - EIGRP, EX - EIGRP external, O - OSPF, IA - OSPF inter area 
+       N1 - OSPF NSSA external type 1, N2 - OSPF NSSA external type 2
+       E1 - OSPF external type 1, E2 - OSPF external type 2
+       i - IS-IS, su - IS-IS summary, L1 - IS-IS level-1, L2 - IS-IS level-2
+       ia - IS-IS inter area, * - candidate default, U - per-user static route
+       o - ODR, P - periodic downloaded static route
+
+Gateway of last resort is not set
+
+       172.21.0.0/24 is subnetted, 2 subnets
+C       192.168.0.19 is directly connected, FastEthernet0
+C       172.21.19.0 is directly connected, FastEthernet1
+\end{verbatim}
+    \end{screen}
+  \end{center}
+  
+\item 今回は，静的ルーティングが行うために必要な経路を考え，他グループとのルーティング設定として他全グループの追加の登録を行う．
+\begin{center}
+\begin{screen}
+\begin{verbatim}
+router9# configure terminal             (設定モードに入る)
+Enter configuration commands, one per line. End with CNTL/Z.
+router9(config)#ip route 172.21.11.0 255.255.255.0 192.168.0.11
+...
+\end{verbatim}
+\end{screen}
+\end{center}
+\end{enumerate}
+
+\subsubsection{コンピュータのネットワーク設定の変更}
+各コンピュータにおいて，ネットワーク設定時に設定した IP アドレス，ネットマスク，デフォルトゲートウェイ，DNS サーバ等のネットワーク設定を変更する．
+\begin{itemize}
+\item Sever の設定\\
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+　# vi /etc/network/interface
+\end{verbatim}
+    \end{screen}
+  \end{center}　
+  　ネットワーク設定時において上記の中に設定した記述を以下のように編集する．
+
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+　# vi /etc/network/interface
+
+auto emp2s0
+iface emp2s0 inet static
+      address 172.21.19.2
+      netmask 255.255.255.0
+      gateway 172.21.19.1
+      dns-namesever 192.168.0.1
+      dns-search info.kochi-tech.ac.jp
+\end{verbatim}
+    \end{screen}
+  \end{center}　
+  
+  ルーターに接続を行ったため，他のグループとも接続が可能になる．今回は，他のグループの 172.21.22.2 に ping を送信し，動作確認を行った．以下により 正しくネットワーク接続が行われた．
+
+\begin{center}
+  \begin{screen}
+\begin{verbatim}
+# ping 172.21.22.2
+PING 172.21.22.2 (172.21.22.2) 56(84) bytes of data.
+From 172.21.19.2 icmp_seq=1 Destination Host Unreachable
+From 172.21.19.2 icmp_seq=2 Destination Host Unreachable
+From 172.21.19.2 icmp_seq=3 Destination Host Unreachable
+\end{verbatim}
+  \end{screen}
+\end{center}
+
+　また，traceroute コマンドを用いて正しい経路の元ネットワークが繋がれているか確認する．
+
+\begin{center}
+  \begin{screen}
+\begin{verbatim}
+# traceroute 172.21.22.2
+traceroute to 172.21.22.2 (172.21.22.2), 30 hops max, 60 byte packets
+ 1 172.21.19.1 (172.21.19.1) 0.491 ms 0.539 ms 0.606 ms
+ 2 192.168.0.22 (192.168.0.22) 0.839 ms 0.829 ms 0.879 ms
+ 3 172.21.22.2 (172.21.22.2) 0.805 ms 0.795 ms 0.786 ms 
+\end{verbatim}
+  \end{screen}
+\end{center}
+
+\item CentOS の設定\\
+\begin{enumerate}
+\item 「System Tool」, 「Setting」, 「Network」,「Wired」を順に選択した.
+\item 設定を以下のように変更した.
+  \begin{table}[htbp]
+\caption{CentOS ネットワーク設定情報}
+\label{tab:linuxinstall}
+\begin{center}
+\begin{tabular}{|l||c|}
+\hline
+Address & 172.21.19.3\\ \hline
+Netmask & 255.255.255.0\\ \hline
+Gateway & 172.21.19.1\\ \hline
+DNS Server & 192.168.0.1 \\ \hline
+\end{tabular}
+\end{center}
+\end{table}
+\item 「make available to other users」のチェックボックスにチェックが入っていることを確認して「Apply」ボタンを選択した.
+\item Terminalを開き, グループ内のパソコンに「ping」「traceroute」コマンドを用いて正しいネットワーク接続が行われているかを確認した.
+  \begin{center}
+  \begin{screen}
+\begin{verbatim}
+# ping 172.21.22.2
+PING 172.21.22.2 (172.21.22.2) 56(84) bytes of data.
+From 172.21.19.2 icmp_seq=1 Destination Host Unreachable
+From 172.21.19.2 icmp_seq=2 Destination Host Unreachable
+From 172.21.19.2 icmp_seq=3 Destination Host Unreachable
+
+# traceroute 172.21.22.2
+traceroute to 172.21.22.2 (172.21.22.2), 30 hops max, 60 byte packets
+ 1 172.21.19.1 (172.21.19.1) 0.491 ms 0.539 ms 0.606 ms
+ 2 192.168.0.22 (192.168.0.22) 0.839 ms 0.829 ms 0.879 ms
+ 3 172.21.22.2 (172.21.22.2) 0.805 ms 0.795 ms 0.786 ms 
+\end{verbatim}
+  \end{screen}
+\end{center}
+\end{enumerate}
+
+  
+\item Windows10 の設定\\
+\begin{enumerate}
+\item PCにログインをし、「スタートボタン（左下のボタン）」,「設定」,「ネットワークとインターネット」を順にクリックしていき,「イーサネット」を右クリック,「プロパティ」を選択する.\\
+\item 「イーサネットのプロパティ」の画面の「インターネットプロトコルバージョン4(TCP/IPv4)」を選択し, 「プロパティ」をクリックする.
+
+\item  設定を表\ref{tab:win10rou}のように変更する.
+  \begin{table}[h]
+\caption{Windows10のアドレス設定}
+\label{tab:win10rou}
+\begin{center}
+\begin{tabular}{|l||c|}
+\hline
+IPアドレス & 172.21.19.4\\ \hline
+サブネットマスク & 255.255.255.0\\ \hline
+デフォルトゲートウェイ & 172.21.19.1\\ \hline
+\end{tabular}
+\end{center}
+\end{table}
+\item 「次のDNSサーバーのアドレスを使う」を選択し,設定を表\ref{tab:sbwin10}のようにする.
+
+  
+\begin{table}[h]
+\caption{Windows10のサーバーの設定}
+\label{tab:sbwin10}
+\begin{center}
+\begin{tabular}{|l||c|}
+\hline
+優先DNSサーバー & 172.21.19.2\\ \hline
+\end{tabular}
+\end{center}
+\end{table}
+\item 「OK」をクリックする.\\
+\end{enumerate}
+
+\item 動作確認
+
+\begin{enumerate}
+
+\item 次のコマンドをコマンドプロンプトに入力する.\\
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+ping 172.21.22.1
+\end{verbatim}
+    \end{screen}
+  \end{center}
+\item コマンドプロンプト上に次のメッセージが表示される.\\
+    \begin{center}
+    \begin{screen}
+\begin{verbatim}
+172.21.22.1 に ping を送信しています 32 バイトのデータ:
+172.21.22.1 からの応答: バイト数 =32 時間 =1ms TTL=254
+172.21.22.1 からの応答: バイト数 =32 時間 =1ms TTL=254
+172.21.22.1 からの応答: バイト数 =32 時間 =1ms TTL=254
+172.21.22.1 からの応答: バイト数 =32 時間 =1ms TTL=254
+
+172.21.22.1 の ping 統計:
+    　パケット数: 送信 = 4、受信 = 4、損失 = 0（0% の 損失）、
+ラウンド トリップの概算時間（ミリ秒）:
+    最小 = 1ms、最大 = 1ms、平均 = 1ms 
+\end{verbatim}
+    \end{screen}
+  \end{center}
+
+\item 次のコマンドをコマンドプロンプトに入力する.
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+tracert 172.21.22.2
+\end{verbatim}
+    \end{screen}
+  \end{center}
+\item コマンドプロンプト上に次のメッセージが表示される.\\
+    \begin{center}
+    \begin{screen}
+\begin{verbatim}
+172.21.22.2 へのルートをトレースしています。経由するホップ数は最大30です
+
+1       1 ms    <1ms    <1 ms  172.21.19.1
+2       1 ms	    1ms     1 ms  192.168.0.22
+3       1 ms	    1ms     1 ms  172.21.22.2
+
+トレースを完了しました。
+\end{verbatim}
+    \end{screen}
+  \end{center}
+\end{enumerate}
+
+
+
+\item スイッチの動作確認
+
+\begin{enumerate}
+
+\item 次のコマンドをコマンドプロンプトに入力する.\\
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+ping 172.21.19.6
+\end{verbatim}
+    \end{screen}
+  \end{center}
+\item コマンドプロンプト上に次のメッセージが表示される.\\
+    \begin{center}
+    \begin{screen}
+\begin{verbatim}
+172.21.19.6 に ping を送信しています 32 バイトのデータ:
+172.21.19.6 からの応答: バイト数 =32 時間 =1ms TTL=128
+172.21.19.6 からの応答: バイト数 =32 時間 =1ms TTL=128
+172.21.19.6 からの応答: バイト数 =32 時間 =1ms TTL=128
+172.21.19.6 からの応答: バイト数 =32 時間 =1ms TTL=128
+
+
+172.21.19.6 の ping 統計:
+    　パケット数: 送信 = 4、受信 = 4、損失 = 0（0% の 損失）、
+    
+\end{verbatim}
+    \end{screen}
+  \end{center}
+  
+  
+  
+  
+\end{enumerate}
+
+\item 7〜20は他班のためのポートになったため，自グループの端末を18ポートに繋いでもpingが飛ばないことを確認．
+
+\begin{center}
+    \begin{screen}
+\begin{verbatim}
+ping 172.21.19.7
+\end{verbatim}
+    \end{screen}
+  \end{center}
+  
+\begin{enumerate}
+
+\item コマンドプロンプト上に次のメッセージが表示される．
+    \begin{center}
+    \begin{screen}
+\begin{verbatim}
+172.21.19.7 に ping を送信しています 32 バイトのデータ:
+172.21.19.4 からの応答: 宛先ホストに到達できません。
+172.21.19.4 からの応答: 宛先ホストに到達できません。
+172.21.19.4 からの応答: 宛先ホストに到達できません。
+172.21.19.4 からの応答: 宛先ホストに到達できません。
+
+
+172.21.19.7 の ping 統計:
+    　パケット数: 送信 = 4、受信 = 4、損失 = 0（0% の 損失）、
+    
+\end{verbatim}
+    \end{screen}
+  \end{center}
+  
+  \item 次のコマンドをコマンドプロンプトに入力する.
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+tracert 172.21.19.6
+\end{verbatim}
+    \end{screen}
+  \end{center}
+\item コマンドプロンプト上に次のメッセージが表示される.\\
+    \begin{center}
+    \begin{screen}
+\begin{verbatim}
+NOTE9 [172.21.19.6] へのルートをトレースしています。
+経由するホップ数は最大30です
+
+1       1 ms    <1ms    <1 ms  NOTE9 [172.21.19.6]
+
+トレースを完了しました。
+\end{verbatim}
+    \end{screen}
+  \end{center}
+
+\end{enumerate}
+
+
+  
+\item MacOS の設定\\
+　\begin{itemize}
+\item メニューバーにある「アップルアイコン」から「システム環境設定」→「インターネッ トとワイヤレス」の「ネットワーク」を選択する．\\
+\item 「Ethernet」から「IPv4 の構成」を「手入力」とする．\\
+
+\item IPアドレスの「192.168.0.45」を「172.21.14.5」に，ルータの「192.168.0.1」を「172.21.14.1」に変更し，動作確認を行う．\\
+
+\end{itemize}
+\end{itemize}
+
+\begin{center}
+\begin{screen}
+\begin{verbatim}
+$ ping 172.21.22.6
+PING 172.21.22.6 (172.21.22.6) 56 data bytes
+64 bytes from 172.21.22.6: imcp_seq=0 ttl=126 time=1.744 ms
+64 bytes from 172.21.22.6: imcp_seq=1 ttl=126 time=1.441 ms
+64 bytes from 172.21.22.6: imcp_seq=2 ttl=126 time=1.457 ms
+64 bytes from 172.21.22.6: imcp_seq=3 ttl=126 time=1.285 ms
+^C
+\end{verbatim}
+  \end{screen}
+\end{center}
+
+
+\subsection{スイッチの接続}
+ここでは，LAN 接続を行うための設定を行う．タグ VLAN の接続として他グループとケーブルを接続して行っていく．今回必要となる VLAN, スイッチについての設定項目は以下のようになる．
+
+\begin{itemize}
+\item VLAN 番号
+  \begin{itemize}
+  \item 自グループ用 VLAN:9 (グループ番号)
+
+  \item 他グループ用 VLAN:グループ番号
+
+  \end{itemize}
+      \end{itemize}
+
+    \begin{itemize}
+  \item スイッチの設定
+
+    \begin{itemize}
+
+    \item ポート1〜6：自グループ ポート VLAN
+
+    \item ポート17〜20：他グループ用 ポート VLAN
+
+    \item ポート21〜22：自グループ・他グループ教共用のタグ VLAN 
+
+    \item ポート23〜24：設定なし
+
+    \end{itemize}
+    \end{itemize}
+
+\subsubsection{ケーブルの作成と設定}
+ペアを組むグループとの間を接続するのに十分な長さのケーブルを作成し，以下の手順に沿ってスイッチの設定作業を行っていく．
+
+\begin{enumerate}
+
+\item 管理者権限に入り，パスワード入力をし現在の設定の確認を行う．
+
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+Switch>enable
+password:
+Switch#show running-config
+\end{verbatim}
+\end{screen}
+\end{center}
+
+\item 設定モードに入りグループ番号を入力する．
+
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+Switch#configure terminal
+Enter configuration commands, one per line.  End with CNTL/Z.
+Switch(config)#vlan 009
+Switch#configure terminal
+Switch(config-vlan)#name group9
+Switch(config-vlan)#exit
+\end{verbatim}
+    \end{screen}
+    \end{center}
+
+\item 次に interface コマンドでポートの設定を行う．
+
+  \begin{itemize}
+  \item まず，ran 記述で複数ポートの設定を行う．
+    
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+Switch(config)#int range fa0/0-16   -16   1-16    -16
+\end{verbatim}
+\end{screen}
+\end{center}
+
+\item  ポート VLAN 用に設定する．IOS ではアクセスVLAN と呼ぶ．
+
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+Switch(config-if-range)#switchport mode access
+Switch(config-if-range)#switchport access vlan 9  (グループ番号) 
+\end{verbatim}
+    \end{screen}
+  \end{center}
+
+  \end{itemize}
+
+\item 次に、それぞれ他グループ用ポート VLAN の設定を行う．
+  
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+Switch(config)#int range fa0/21-22
+Switch(config-if-range)#switchport mode trunk
+
+Switch(config)#int range fa0/23
+Switch(config-if-range)#shutdown
+Switch(config-if-range)#exit
+
+Switch(config)#int range fa0/24
+Switch(config-if-range)#shutdown
+Switch(config-if-range)#exit
+\end{verbatim}
+\end{screen}
+\end{center}
+
+\end{enumerate}
+
+
+\subsubsection{接続}
+\begin{itemize}
+\item タグ VLAN ポートとペアグループのタグ VLAN ポートをケーブル1本で接続
+
+\item 自グループの機器は，自グループのスイッチの自グループの自グループ VLAN へ接続
+
+\item 自グループのノートPC は，ペアグループのスイッチの自グループ用 VLAN へ接続
+
+\item 他グループのノートPC は，自グループのスイッチペアグループ用 VLAN へ接続
+
+\end{itemize}
+
+\subsubsection{動作確認}
+\begin{itemize}
+\item sever での動作確認\\ 
+  　まず，ping コマンドよりペアグループへの接続を確認する．
+
+\begin{center}
+  \begin{screen}
+\begin{verbatim}
+# ping 172.21.18.6
+PING 172.21.18.6 (172.21.18.6) 56(84) bytes of data.
+From 172.21.19.2 icmp_seq=1 Destination Host Unreachable
+From 172.21.19.2 icmp_seq=2 Destination Host Unreachable
+From 172.21.19.2 icmp_seq=3 Destination Host Unreachable
+\end{verbatim}
+  \end{screen}
+\end{center}
+
+\item 次に，traceroute コマンドよりネットワーク経路の確認を行う．
+
+\begin{center}
+  \begin{screen}
+\begin{verbatim}
+# traceroute 172.21.18.4
+traceroute to 172.21.18.4 (172.21.18.4), 30 hops max, 60 byte packets
+ 1 172.21.19.1 (172.21.19.1) 0.481 ms 0.536 ms 0.603 ms
+ 2 192.168.0.18 (192.168.0.18) 0.880 ms 0.871 ms 1.121 ms
+ 3 172.21.18.4 (172.21.18.4) 0.847 ms 0.838 ms 0.828 ms 
+\end{verbatim}
+  \end{screen}
+\end{center}
+
+　これより，一旦自グループのデフォルトゲートウェイにでて，他グループのルーター FE0 のアドレスを経由して目的の 172.21.18.4 に接続された．\\
+\end{itemize}
+
+　これと同様に，ping と traceroute を用いて各コンピュータで動作確認を行った結果正常に他グループ端末と通信を行うことができた．
+
+\section{考察}
+　ルータの設定から更に LAN を限定したスイッチの設定を行った．このルータを設定し，スイッチで更にネットワークを分割することは組織間の通信において通信速度やコストの面だけでなく，セキュリティ面においてとても重要な対策の1つとなっている．具体的には，ネットワークを分割することにより，標的型サーバー攻撃からネットワークを保護することができる．標的型サーバー攻撃とは，標的となる組織の重要な情報の入手が最終目的とするサーバー攻撃のことである．これを行うために，周辺機器や関連組織から前前準備となる情報を入手したり，一時的に攻撃を仕掛けることがある．\\
+　しかし，大きな組織では繋がれたネットワークの数も大きくなり管理が大変である．これより，大きな組織でネットワークを構築する場合はネットワーク管理者やネットワーク管理組織を置く必要があると考える．ネットワークに従事していて適切な判断が行うことのできる管理責任者や組織を設ける事によりサーバー攻撃の対策とした適切なネットワークの分割を行うことができるのではないかと考える．
+
+\begin{thebibliography}{9}
+\bibitem{bib:severtext}
+    小泉修 著，
+    ``図解でわかる サーバのすべて,''
+    株式会社 日本実業出版社，2000  
+\bibitem{bib:iptext}
+    竹下隆史・村山公保・荒井透・苅田幸雄 著，
+    ``マスタリング TCP/IP 入門編 第5版,''
+    株式会社 オーム社，2004．
+\bibitem{bib:routing}
+    友近剛史，池尻雄一，白崎泰弘， 著，
+    ``インターネットルーティング入門　図解でわかる経路制御の仕組み,''
+    翔泳社，2014．
+\bibitem{bib:cisco}
+    株式会社ソキウス・ジャパン 編著，
+    ``徹底攻略 Cisco CCNA Routing&Switching教科書,''
+    株式会社インプレス，2017.
+\bibitem{bib:network}
+    Gene 著，
+    ``ネットワーク構築の基礎,''
+    マイナビ出版，2009．
+\end{thebibliography}
+
+\end{document}
