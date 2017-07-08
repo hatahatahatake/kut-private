@@ -1,0 +1,688 @@
+\documentclass[a4j,titlepage]{jarticle}
+\usepackage[dvipdfmx]{graphicx}
+\usepackage{url}
+\usepackage{epsfig}
+\usepackage{ascmac}
+\usepackage{here}
+%
+\title{情報学群実験第4C 第3章レポート\\　DNS・メールサービス}
+\author{学籍番号 1190358\\
+        畠山 友華\\
+        グループ9}
+\date{\today}
+%% プリアンブルここまで
+
+%% 本文
+\begin{document}
+\maketitle
+\section{目的}
+% 背景からの実験の目的を記述
+% --- 背景 ---
+インターネットが発展する以前では，手紙を筆で書き，切手を貼り，郵便局へ出し，郵便局の人が渡したい相手の住所へと送ってくれるといったやり取りが行われていた．しかし，近年では急激にインターネットが発展・普及し現在ではコンピュータ上で電子メールという形で手紙のやり取りができるようになった．\\
+% --- 目的 ---
+インターネットを使った様々なアプリケーションでは，通信の宛先・送信元を識別するのにホスト名を用いることが多い．ここでホスト名とは，通信を行う端末に対し何らかの意味をもたせた文字列を用いて名前をつけたものである．それに対して，インターネットの通信プロトコル IP では，IPアドレスを用いて端末の識別を行っている．そこで，アプリケーションが通信を行うためにホスト名を指定した後，IP パケットでデータを伝送するために，そのホスト名に対応する IPアドレスを求める必要がある．そこで，DNS(Domain Name System)を用いて名前解決を行い，電子メール及び Web の閲覧を可能にする．\\
+　DNS を用いることで電子メールのやり取りも可能になる代表的なアプリケーションの一つである．ネットワーク上でテキスト情報のやり取りを可能にするために，送受信で用いられるプロトコルのサーバ構築を行う必要がある．これを行うことで，利用者の誰もが送受信が可能になる．
+
+
+\section{内容}
+% 2つの実験の行う内容
+IPアドレスの代わりにホスト名を用いて通信先を指定するためには，その2つの対応付けが必要となる．これを，名前解決と呼ぶ．この名前解決システムを持つインターネットの標準的なプロトコルを DNS(Domain Name System)という．そこで，サーバにおいて BIND をインストールし DNS サーバの構築を行い，サーバ・各クライアントOS において DNS を用いた問い合わせのためのリゾルバの設定を行う．この DNS による名前解決の仕組みについては以下の図\ref{fig:dns2}のように行われる．このとき，ホスト名からIPアドレスを得る方法を正引きといい，IPアドレスからホスト名を得る方法を逆引きという．\\
+
+  \begin{figure}[htbp]
+    \begin{center}
+      \resizebox{115mm}{!}{\includegraphics{dns2.png}}
+      \caption{DNSの名前解決の仕組み}
+     \label{fig:dns2}
+   \end{center}
+  \end{figure}
+
+電子メールはネットワーク上でテキスト情報をやり取りするアプリケーションである．電子メールは，差出人と宛先が明示され，差出人から宛先へと情報が転送される．宛先のアドレスがわかれば，誰でもその宛先人に対して情報を送ることができる．この電子メール配送時の電子メールサーバの役割は，電子メールの送信・受信，電子メールのメールスプールへの保存の3つである．電子メールの仕組みについては以下の図\ref{fig:mail}のように行われる．ここでは，電子メールを正常に利用するための SMTP・POP サーバの構築，および各クライアントOS への MUA 設定を行い，電子メール送受信の確認を行う．
+
+  \begin{figure}[htbp]
+    \begin{center}
+      \resizebox{115mm}{!}{\includegraphics{mail.png}}
+      \caption{電子メールの仕組み}
+     \label{fig:mail}
+   \end{center}
+  \end{figure}
+
+
+\section{要素技術}
+普段使用している電子メールでは様々なプロトコルを用いて電子メールの送受信を可能にしている．今回は，DNS・メールサーバを構成する以下の「DNS(プロトコル)」，「リゾルバ」，「MTA」，「SMTP」について説明・解説をを行っていく．
+
+\subsection{DNS(プロトコル)\cite{bib:iptext}}
+私達が普段インターネットにアクセスするときは IPアドレスを使わずにローマ字とピリオドを使った名前を使う．通常，一般ユーザが TCP/IP で通信するときには IPアドレスを使用しない．これは，DNS(Domain Name System)の機能によるものである．DNS では，ローマ字とピリオドを使ったホスト名とドメイン名からなる名前から IPアドレスへと自動的に変換する機能を持つ．\\
+　現在では，ネットワークの規模が大きくなり，接続するコンピュータの数を増えてくると，ホスト名や IPアドレスの登録・変更処理を1カ所で集中管理することは不可能になった．そこで，IPアドレスの対応関係を効率よく管理するための手段として，DNS が考えられた．このシステムではホストを管理している組織が，データの設定や変更を行うことができる．つまり，組織内でホスト名と IPアドレスの関係を表すデータベースを管理することができる．DNS では通信をしたいユーザがホスト名(およびドメイン名)を入力すると，自動的にホスト名や IPアドレスが登録されているデータベースサーバが検索され，そこから IPアドレスの情報を得るようになっている．これにより，ホスト名や IPアドレスの登録や変更をした場合でもその組織内だけで処理をすればよく，他の機関に報告や申請をする必要はなくなった．また，DNS のこのような機能を名前解決と呼ぶ．\\
+
+\subsubsection{ドメイン名の構造}
+ドメイン名とは，ホストの名前や組織の名前を識別するための階層的な名前のことである．高知工科大学の場合は以下がドメイン名となる．
+
+\begin{center}
+  \begin{screen}
+\begin{verbatim}
+        kochi-tech.ac.jp
+\end{verbatim}
+\end{screen}
+\end{center}
+
+ドメイン名を利用する前は単なるホスト名だけで IPアドレスが管理されていたため，たとえ異なる組織であっても同じホスト名をつけることができなかった．階層的なドメインん名の登場により各組織単位で自由にホスト名をつけることができるようになった．また，DNS は図\ref{fig:dns}のような階層構造になっている．これは，気をひっくり返したような構造になっているため，木構造と呼ぶ．一番上の root の部分が TLD(Top Level Domain)と呼ばれており，その下に複数に分かれた枝がある．この枝のことを SLD(Sub Level Domain)と呼ばれている．また，「jp」ドメインは国の名称となっており，「ac」や「co」は大学や企業などといった組織を表している．
+
+  \begin{figure}[htbp]
+    \begin{center}
+      \resizebox{115mm}{!}{\includegraphics{dns.png}}
+      \caption{ドメインの階層構造}
+     \label{fig:dns}
+   \end{center}
+  \end{figure}
+
+\subsection{リゾルバ\cite{bib:dnstext}}
+リゾルバ(resolver)とは，ネームサーバをアクセスするクライアントである．ドメイン名空間からの情報を必要とするプログラムは，リゾルバを使用する．リゾルバは，以下の操作を行っている．
+
+\begin{itemize}
+\item ネームサーバへの問い合わせ
+\item 応答の解釈(資源レコードまたはエラーどちらであるか)
+\item 要求側プログラムへの情報の返送
+\end{itemize}
+
+BIND では，リゾルバは単なるライブラリルーチンの集まりであり，telnet や ftp といったプログラムに組み込まれていて，独立したプロセスですらない．また，リゾルバは，問い合わせ要求を組み立てそれを相手に送信して応答を待ち，応答が得られない場合は要求を再送信するだけで他には何もできない．つまり，問い合わせへの応答に必要な処理の殆どがネームサーバで行う．DNS の仕様では，このようなリゾルバをスタブリゾルバ(stub resolver)と呼んでいる．
+
+\subsection{MTA}
+MTA(Mail Transfer agent)はインターネット上のサイトからサイトへメールを配送する重要な役割を持っており，メールを送信するには送信者はシステムの MTA へ接続し，SMTP を使用しメールを送る．MTA は受信者へ配送する責任を負う事になる．\\
+　受信者は Courier IMAP などの MDA(Mail Delivery agent)を使用し，メールを受信する．MDA は MTA と通信し，メールを受け取り，受信者のメールボックスに納める．メールを表示するのは Thunderbird などの，受信者の MUA(Mail user agent)である．\\
+　受信者がメールを受け取る方法は，通常 TCP/IP を使用した POP3 または IMAP4 である．現在の MUA はすべて POP3，IMAP4 のどちらにも対応している．メールを送信する場合は，MUA が MTA に接続し，SMTP を使用し送信する\cite{mailtext}．
+
+\subsection{SMTP}
+インターネットでは，送信元は宛先マシンの25番ポートに TCP コネクションを確立し，電子メールを転送する．このポートを監視しているのが，SMTP(Simple Mail Transfer Protcol)を使う電子メールデーモンである．このデーモンヒャコネクション要求を受付，メッセージを適切なメールボックスにコピーする．メッセージを配送席なかった場合，配送できなかったメッセージの最初の部分を含む誤り報告を発信元に送り返す．\\
+　SMTP はシンプルな ASCII プロトコルであり，25番ポートに TCP コネクションを確立した後，送信側のマシンがクライアントとして動作し，受信側のマシンがサーバとして動作する．クライアントはサーバからの応答を待つ．サーバは最初に，その識別子とメールを受け取る準備ができているか，できていないかを1行のテキストとして送信する．準備ができていなかった場合，クライアントはコネクションを解放し，後で再度接続を試みる．\\
+　サーバが電子メールを受け取る準備ができている場合，クライアントはメールが誰からのもので，宛先が誰かをサーバに通知する．サーバに，その宛先に指定された受信者が存在する場合，サーバはメールの送信を許可するメッセージをクライアントに送る．クライアントはメッセージを転送し，サーバは確認応答を返す．TCP は信頼性のあるバイト単位のデジタルデータのひと続きであるバイトストリームを提供しているため，テェックサムは必要ない．送りたいメールまだあれば，同様に処理する．両方向で全ての電子メールの交換が終了したら，コネクションを解放する\cite{bib:nettext}．
+
+\newpage
+\section{作業記録}
+ここでは，DNS と メールサーバを構築するために，以下の作業を行う．
+
+\subsection{DNS設定}
+次の手順から DNS の設定を行う．
+\begin{enumerate}
+\item Sever でネームサーバの構築をする．
+  \begin{itemize}
+  \item ドメインを構成し，どのドメインのネームサービスを server にて行う．
+
+  \item ドメイン名は，g9.info.kochi-tech.ac.jp とする．(9はグループ番号)
+
+  \item ホスト名からIPアドレスを引けるように設定を行う．
+
+  \item ドメインの Web サーバは，www.domain 名でアクセスできるようにし，実際の Web サーバは server となるようにする．
+
+  \item このドメインの SMTP サーバは，smtp.domain 名でアクセスできるようにし，実際のサーバは，server となるようにする．
+
+  \item このドメインの POP サーバは，pop.domain 名でアクセスできるようにし，実際のサーバは，server となるようにする．
+  \end{itemize}
+
+\item server に DNS リゾルバの機能を構築する．
+
+\item server で DNS キャッシュサーバを構築し，クライアント OS は本サーバをリゾルバとして名前解決できるようにする．\\
+  　各クライアントOS ドメイン名，ネームサーバアドレスを変更し，各ホストが server の DNS サーバを検索できるように設定する．このとき，各クライアントOS の IPアドレスとマシン名は以下の表\ref{tab:dnsserver}となる．(19はグループ番号9に10を加えた数)
+
+\begin{table}[htbp]
+\caption{各コンピュータとマシン名・IPアドレスの対応付け}
+\label{tab:dnsserver}
+\begin{center}
+\begin{tabular}{ccl}
+  \hline
+  コンピュータ & マシン名 & IPアドレス \\ \hline \hline
+  サーバ & server & 172.21.19.2 \\ \hline
+  CentOS & lunix & 172.21.19.3 \\ \hline
+  Windows10 & win & 172.21.19.4 \\ \hline
+  Macintosh & mac & 172.21.19.5 \\ \hline
+  ノートPC & note & 172.21.19.6 \\ 
+  \hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\item 設定ファイルは以下の場所に置く．
+
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+        named.conf                            /etc/bind
+        ゾーンファイル等のデータを置くディレクトリ  /etc/bind
+        ゾーンファイル名                         /etc/bind/g9.zone
+        ドメイン名                              g9.info.kochi-tech.ac.jp
+\end{verbatim}
+    \end{screen}
+  \end{center}
+  
+
+\end{enumerate}
+  
+  \subsection{DNSサービスの提供}
+まず，Server において BIND のインストールとリゾルバの設定を以下の手順で行う．
+
+\begin{enumerate}
+\item BIND のインストール
+  
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+ # sudo su
+ # export http_proxy=http://192.0.1:7999
+ # export https_proxy=http://192.0.1:7999
+ # aqt update
+ # apt install bind9  
+\end{verbatim}
+    \end{screen}
+\end{center}　
+\item named.confの設定
+
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+# vi /etc/bind/named.conf
+
+// This is the primary configuration file for the BIND DNS server named.
+//
+// Please read /usr/share/doc/bind9/README.Debian.gz for information on the 
+// structure of BIND configuration files in Debian, *BEFORE* you customize 
+// this configuration file.
+//
+// If you are just adding zones, please do that in /etc/bind/named.conf.local
+
+//include "/etc/bind/named.conf.options";
+//include "/etc/bind/named.conf.local";
+//include "/etc/bind/named.conf.default-zones";
+options{
+        directory       "/etc/bind";
+};
+zone "."{
+        type    hint
+        file    "etc/bind/named.root";
+};
+zone "g9.info.kochi._tech.ac.jp {
+        type    master;
+        file    "/etc/bind/g9.zone";
+};
+\end{verbatim}
+    \end{screen}
+
+  \end{center}
+\item named.rootファイルの取得
+  \begin{center}
+  \begin{screen}
+\begin{verbatim}
+#ftp 192.168.0.1
+Connected to 192.168.0.1.
+220 mainserver FTP server (Version 6.00LS) ready.
+Name (192.168.0.1:exp): anonymous
+331 Guest login ok, send your email address as password.
+Password:
+230- Your welcome message here.
+230 Guest login ok, access restrictions apply.
+Remote system type is UNIX.
+Using binary mode to transfer files.
+ftp> cd /pub/data
+250 CWD command successful.
+ftp> get named.root
+local: named.root remote: named.root
+200 PORT command successful.
+150 Opening BINARY mode data connection for 'named.root' (731 bytes).
+226 Transfer complete.
+731 bytes received in 0.00 secs (590.4609 kB/s)
+ftp> quit
+221 Goodbye.
+
+\end{verbatim}
+  \end{screen}
+\end{center}
+\item ディレクトリ/etc/bindに格納.
+\begin{center}
+  \begin{screen}
+\begin{verbatim}
+# mv named.root /etc/bind/
+\end{verbatim}
+  \end{screen}
+\end{center}
+\item named を再起動.
+  
+
+\begin{center}
+  \begin{screen}
+\begin{verbatim}
+# systemctl restart bind9
+\end{verbatim}
+  \end{screen}
+\end{center}
+
+\item /etc/named/g9.zoneファイルの書き込み
+
+\begin{center}
+  \begin{screen}
+\begin{verbatim}
+#vi /etc/named/g9.zone
+$TTL    100
+@       IN  SOA g10.info.kochi-tech.ac.jp. postmaster.g10.info.kochi-tech.ac.jp(        2017041701 
+        100 
+        100 
+        1w
+        100 )
+        IN      NS      server.g10.info.kochi-tech.ac.jp.
+server  IN      A       172.21.19.2
+www     IN      CNAME   server
+smtp    IN      CNAME   server
+pop     IN      CNAME   server
+linux   IN      A       172.21.19.3
+win     IN      A       172.21.13.4
+mac     IN      A       172.21.19.5
+note    IN      A       172.21.19.6
+g9.info.kochi-tech.ac.jp        IN  MX 10  server.g9.info.kochi-tech
+\end{verbatim}
+  \end{screen}
+\end{center}
+
+\item サーバOSのリゾルバ設定
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+#vi /etc/resolv.conf
+domain g9.info.kochi-tech.ac.jp
+searchi g9.info.kochi-tech.ac.jp
+nameserver 127.0.0.1
+\end{verbatim}
+    \end{screen}
+  \end{center}
+  \item bindの起動.
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+#systemctl enable bind9
+#systemctl start bind9
+#ps auxww | grep bind9
+\end{verbatim}
+    \end{screen}
+    \end{center}
+\item digコマンドによる動作確認(IPアドレスが出力されていれば正常)
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+#dig server.g9.info.kochi-tech.ac.jp
+\end{verbatim}
+    \end{screen}
+  \end{center}
+  \end{enumerate}
+
+\subsection{クライアントOSのリゾルバ設定}
+以下の手順に沿って各クライアント OS のリゾルバ設定を行う．
+
+\subsubsection{CnetOSのリゾルバ設定}
+サーバーと同様の設定でも動作はするが，CentOS独自のGUI設定スクリプトが上書きをするので，GUIのネットワーク設定からも設定し直す．
+\begin{itemize}
+
+\item 「Application」→「System Tool」→「Setting」→「Network」→「Wired」と進む
+
+\item 「DNS Server」の欄を変更し，「Apply」を選択．
+
+\item 動作確認
+
+自グループで構成したDNSサーバを利用し，自グループ内のホスト名からの正引き，外部ネットワークの名前解決などが行えるか確認を行った．なお，今回の設定ではIPアドレスからの逆引きは使えない．
+
+\begin{center}
+    \begin{screen}
+    \begin{verbatim}
+[exp@localhost ~]$ nslookup
+> server.g9.info.kochi-tech.ac.jp
+Server:         172.21.19.2
+Address:        172.21.19.2#53
+
+Name:   server.g9.info.kochi-tech.ac.jp
+Address:  172.21.19.2  
+>google.co.jp
+Server:         172.21.19.2
+Address:        172.21.19.2#53
+
+Non-authoritative answer:
+Name:   google.co.jp
+Address: 222.222.22.2
+> server.g12.info.kochi-tech.ac.jp
+Server:         172.21.19.2
+Address:        172.21.19.2#53
+
+Non-authoritative answer:
+Name:   server.g12.info.kochi-tech.ac.jp
+Address:  172.21.22.2  
+  \end{verbatim}
+    \end{screen}
+  \end{center}
+
+\end{itemize}
+
+\subsubsection{Windows10のリゾルバ設定}
+\begin{itemize}
+\item タスクバーにある「スタートボタン」から「コントロールパネル」→「ネットワークと共有センター」の「アダプター設定変更」を選択し,「ローカルエリア接続」をクリックし「プロパティ」を選択
+\item ローカルエリア接続のプロパティ」画面の「インターネットプロトコル バージョン4(TCP/IPv4)」を選択し,「プロパティ」をクリック
+\item DNSサーバのIPアドレスとして「172.21.14.2」を設定
+\end{itemize}
+
+以上で，Windows10 のリゾルバ設定を完了とする．
+
+\subsubsection{MacOSXのリゾルバ設定}
+画面左上にあるりんごマークをクリックし，その中から「システム環境設定...」を選択する．システム環境設定画面から「ネットワーク」を選択する．ネットワーク画面から，接続されているネットワークのDNSサーバを「172.21.19.2」に変更する．この設定を反映させるために「適用」を押す．\\
+　次に動作確認を行う．Windowsはコマンドプロンプト，他のOSはターミナルで，自グループのコンピュータに対して，pingコマンドとtraceroute(tracert)コマンドを使用する．このとき，IPアドレスではなく，ホスト名を指定して通信を行えるか確認する．
+
+\subsubsection{Windows7のリゾルバ設定}
+Windows7 では，「コントールパネル」→「ネットワークとインターネット」→「ネットワークと共有センター」→「アダプターの設定」と順に選択し，用いているネットワークインターフェースのプロパティから，IPv4 の設定の項の DNS サーバを変更し，リゾルバの設定とする．
+
+
+\subsection{電子メールの設定}
+電子メールを送受信できるようにするために，ここではまず電子メールの送信プロトコルである SMTPサーバ,および受信プロトコルである POP サーバの構築を行う．それから，各クライアントOS にて MUA を用いてメールの送受信の確認を行う．また，一つのアドレスへメールを送信すると複数のアドレスへ自動的に送信することのできるエイリアスファイルの作成も行う．\\
+　構成として，グループサーバ内のメールサーバを server とする．そして，メールサーバである server は server に登録されているユーザ <username> 宛のメール username@g9.info.kochi-tech.ac.jp を受け取り，MUA がインストールされたクライアントとメールの送受信を行う．また，メールサーバである server は他のグループ宛のメールをそれぞれのグループのメールサーバに配送する．
+
+\subsection{postfixのインストール}
+まず，Server より postfix を以下の手順からインストールを開始する．
+
+\begin{enumerate}
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+ # sudo su
+ # export http_proxy=http://192.0.1:7999
+ # export https_proxy=http://192.0.1:7999
+ # aqt update
+ # apt install postfix 
+\end{verbatim}
+    \end{screen}
+  \end{center}
+  
+\item ''Internet Site''[Enter]を選択.
+\item /etc/postfix/main.cfを編集して再起動.
+  \begin{itemize}
+  \item mynetworksに自ネットワークのセグメント追加.
+  \item myhostnameがサーバのFQDNとなっていることを確認.
+  \end{itemize}
+  
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+ #vi /etc/postfix/main.cf
+mynetworks 172.21.19.2 /24 
+
+
+ # systemctl restart postfix
+\end{verbatim}
+    \end{screen}
+    \end{center}
+\item MTAの設定を確認
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+ # ps auxww | grep post
+root    2789  0.0  0.2  65408  4516 ?  Ss   01:41   0:00 /usr/lib/postfix/sbin/master
+postfix 2790  0.0  0.2  67476  4444 ?  S    01:41   0:00 pickup -l -t unix -u -c
+postfix 2791  0.0  0.2  67524  4488 ?  S    01:41   0:00 qmgr -l -t unix -u
+\end{verbatim}
+    \end{screen}
+  \end{center}
+\item SMTPプロトコルを用いて送受信の確認
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+#telnet 127.0.0.1 25
+Trying 127.0.0.1...
+Connected to 127.0.0.1.
+Escape character is '^]'.
+220 server.g9.info.kochi-tech.ac.jp ESMTP Postfix (Ubuntu)
+HELLO server.g9.info.kochi-tech.ac.jp
+250 server.g9.info.kochi-tech.ac.jp
+MALL FROM: exp@g9.info.kochi-tech.ac.jp
+250 2.1.0 Ok
+RCPT TO: postmaster@g9.info.kochi-tech.ac.jp
+250 2.1.5 Ok
+DATA
+354 End data with <CR><LF>.<CR><LF>
+TO: postmaster@g9.info.kochi-tech.ac.jp
+FROM: exp@g9.info.kochi-tech.ac.jp
+SUBJECT: TITLE
+
+HONBUN
+.
+250 2.0.0 Ok: queued as 7756360A61
+QUIT
+221 2.0.0 Bye
+\end{verbatim}
+    \end{screen}
+  \end{center}
+\item メールスプールを開き, メールが届いてるかの確認
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+#less /var/mail/root
+\end{verbatim}
+    \end{screen}
+  \end{center}
+\item popのインストールと設定
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+#apt install dovecot-pop3d
+
+
+#vi /etc/dovecot/conf.d/10-auth.conf
+disable_plaintext_auth = no
+↑以下の一文を#を外し, noとする
+
+
+#system restart dovecot
+\end{verbatim}
+    \end{screen}
+  \end{center}
+\item popの動作確認
+   \begin{center}
+    \begin{screen}
+\begin{verbatim}
+#telnet localhost 110
+USER yamamoto
+PASS kenta
++OK
+LIST
+QUIT
+\end{verbatim}
+    \end{screen}
+   \end{center}
+\end{enumerate}
+
+\subsection{MUAの設定}
+以下の手順に沿ってクライアントOS の MUA の設定を行う．
+
+\subsubsection{CentOSのMUAの設定}
+\begin{itemize}
+\item 「Application」→「System Tool」→「Software」と進む
+
+\item 「Package collections」から「Mozilla Thunderbird mail/newsgroup cilent」をインストールし「Apply Changes」を押す．
+
+\item 起動して，セットアップを開始する．
+
+\item ダイアログが表示されるので，以下のように設定し，「continue」を選択
+  
+  \item 以下の項目が表示されるので確認して「Done」を選択
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+　受信サーバ： pop3, pop.gXinfo.kochi-tech.ac.jp
+　送信サーバ： SMTP, smtp.gXinfo.kochi-tech.ac.jp
+　ユーザ名：設定したユーザ名
+\end{verbatim}
+    \end{screen}
+  \end{center}
+  
+  \item 警告画面が表示されるのでチェックを入れて「Done」を選択
+  
+  \item 自グループのエイリアス及びTA班にメールを送信できるか確認して終了
+\end{itemize}
+
+\subsubsection{Windows10のMUAの設定}
+\begin{table}[htbp]
+\caption{MUA設定}
+\label{tab:proxy}
+\begin{center}
+\begin{tabular}{l c}
+\hline
+名前 & ユーザ名\\ 
+電子メールアドレス & ユーザ名@g4.info.kochi-tech.ac.jp\\
+送信メール & server.g4.info.kochi-tech.ac.jp\\ 
+受信メール & pop.g4.info.kochi-tech.ac.jp\\
+受信サーバ & POP3\\
+送信サーバ & SMTP\\
+POP3アカウント & ユーザ名\\
+パスワード & serverで設定した個人のパスワード\\ \hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\begin{itemize}
+\item Internet Explorerを起動しURLに
+
+  \begin{center}
+    \begin{screen}
+      \begin{verbatim}
+        http://www.ozilla.org/en-US/thunderbird/all
+\end{verbatim}
+    \end{screen}
+  \end{center}
+  
+と入力しThunderbirdをダウンロードし,インストールした.
+  
+\item インストール後ソフトを起動させ画面の手順に従って上記の表のように設定する.\\
+  \end{itemize}
+
+\subsubsection{MacOSXのMUA設定}
+ここでは，MacOS XをインストールしたPCでMUAの設定を行う．MUAには，MacOS Xのインストール時から入っている「Mail」を使用する．その手順を以下に示す．
+
+\begin{enumerate}
+\item 画面下部のDockから，切手のアイコンをクリックし，「Mail」を起動する．
+
+\item 「ようこそ Mail へ」という画面が表示されるので，下記のように入力し，「続ける」を押す．以降，ユーザに関する入力欄には，ここで入力したユーザのものを書く．
+\begin{table}[htbp]
+  \begin{center}
+    \begin{tabular}{|c|l|} \hline
+      氏名 & 自分の名前など．適当で良い． \\ \hline
+      メールアドレス & [サーバに作成したユーザ名]@g9.info.kochi-tech.ac.jp \\ \hline
+      パスワード & 上のメールアドレス入力欄に記述したユーザのパスワード \\ \hline
+    \end{tabular}
+  \end{center}
+\end{table}
+
+\item 受信用メールサーバの設定画面が表示されるので，下記のように入力し，「続ける」を押す．
+\begin{table}[htbp]
+  \begin{center}
+    \begin{tabular}{|c|l|} \hline
+      アカウントの種類 & POP \\ \hline
+      説明 & 何も書かない． \\ \hline
+      受信用メールサーバ & pop.g9.info.kochi-tech.ac.jp \\ \hline
+      ユーザ名 & サーバで作成したユーザ名 \\ \hline
+      パスワード & 上のユーザのパスワード \\ \hline
+    \end{tabular}
+  \end{center}
+\end{table}
+
+\item 受信メールのセキュリティ設定画面が表示されるので，「SSL (Secure Sockets Layer) を使用」はチェックせず，「認証」はパスワードを選択して，「続ける」を押す．
+
+\item 送信用メールサーバの設定画面が表示されるので，下記のように入力する．ただし，「認証を使用」にはチェックを入れない．そのため，「ユーザ名」と「パスワード」には何も入力しない．その後，「続ける」を押す．
+\begin{table}[htbp]
+  \begin{center}
+    \begin{tabular}{|c|l|} \hline
+      説明 & 何も書かない． \\ \hline
+      送信用メールサーバ & smtp.g9.info.kochi-tech.ac.jp と入力 \\
+      & 「このサーバのみを使用」にはチェックを入れる．\\ \hline
+    \end{tabular}
+  \end{center}
+\end{table}
+
+\item 送信メールのセキュリティ設定画面が表示されるので，「SSL (Secure Sockets Layer) を使用」はチェックせず，「認証」はパスワードを選択して，「続ける」を押す．
+
+\item アカウントの概要という画面が表示されるので，「作成」を押す．
+
+\end{enumerate}
+
+　電子メールの送信確認は，実際にメールを作成し，相手にメールが届くかどうかで行う．ここでは，宛先のメールアドレスに，自分のアカウントや自グループの他のアカウント，自グループ用のエイリアス，他グループのアカウントのものを指定して確認する．なお，自グループ用のエイリアスは，これをユーザ名としたメールアドレスを宛先にして送信すると，自分を含めた自グループの全員に届くものである．\\
+　MacOS Xの「Mail」では，メール作成を「新規メッセージ」から行う．また，メールの受信状態の更新は画面左上の「受信」を押すことで行う．
+
+
+\subsubsection{Windows7のMUAの設定}
+\begin{itemize}
+\item まず，以下をインストールし， Japanese を選択して Mozilla Thunderbird のセットアップを開始する．
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+　https://www.mozilla.org/en-US/thunderbird/all 
+\end{verbatim}
+    \end{screen}
+  \end{center}
+
+\item セットアップが完了すると新しいメールアカウント設定に進む．ここで，
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+  あなたのお名前：適当でいいがローマ字が無難
+  メールアドレス：ユーザ@gX.info.kochi-tech.ac.jp
+  パスワード：サーバで設定したパスワード
+\end{verbatim}
+    \end{screen}
+  \end{center}
+
+これらを入力し，設定する(Xはグループ番号)．
+
+\item 入力が完了すると，以下の項目が表示される．
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+　受信サーバ： pop3, pop.gXinfo.kochi-tech.ac.jp
+　送信サーバ： SMTP, smtp.gXinfo.kochi-tech.ac.jp
+　ユーザ名：設定したユーザ名
+\end{verbatim}
+    \end{screen}
+  \end{center}
+
+これらが合っているか確認をし，メールを送信して送信できたら完了となる．
+
+\end{itemize}
+
+
+\section{考察}
+DNS の普及によって，ドメインと IPアドレス紐付けを行うことでコンピュータの識別性が向上している．また，DNS の特徴の一つとして名前解決の他に，データ通信を行う際に，UDP プロトコルと TCP プロトコルのどちらも利用することができるという事が挙げられる．\\
+　UDP とは，User Datagram Protcol の略であり，複雑な制御は提供せず，IP を用いてコネクションレスの通信サービスを提供する．つまり，アプリケーションから送要求のあったデータを送信要求のあったタイミングでそのままネットワークに流し送信するため，高速かつ効率的にデータ転送を行うことができる．またデータ送信の際，パケットが失われたとしても再送信制御は行われず，パケットの到達順序が入れ替わったとしても直す機能もない．これより，UDP は総パケット数が少ない場合や動画や音声などのマルチメディア通信などの場合に用いられる．これに対して，TCP とは，Transmission Control Protcol の略であり，データを送信するときの制御機能が充実しており，ネットワークの途中でパケットが喪失した場合の再送信や順序が入れ替わった場合の順序制御などの機能が備わっている．また，TCP にはコネクション制御があり，通信相手がいるかどうか確認されている場合にのみにデータが送信できるため無駄な通信を抑制できる．毎回コネクションを確立してデータ転送を行うため UDP よりもデータ通信に時間がかかってしまう\cite{bib:iptext}．\\
+　これら各通信プロトコルの性質から，TCP が信頼性の確立より安全性は高いが，名前解決の問い合わせを行う DNS では即時性が求められる．これより，DNS のデータ通信においては主に UDP が用いられる．UDP が用いられることにより１パケットのデータ通信の速度は速くなるが以下のセキュリティ問題が考えられる．
+
+\begin{itemize}
+\item DoS・DDoS 攻撃による大規模なサービス妨害の脅威
+
+\item DNS キャッシュポイズニングの脆弱性の脅威
+
+\end{itemize}
+
+これらは，何の質問に対しても回答してしまう UDP を使用することで起こることが多いとされている．また，DoS・DDoS 攻撃においては DNS キャッシュポイズニングの脆弱性を悪用して大規模なデータ送信に伴い攻撃対象をサービス不能状態に陥らせる．このような状態が起こってしまうと，Web や電子メールサービスに利用される DNS にとって学校や企業といった組織間では，サービスを利用できないどころか知らない人が触れることで被害が拡大してしまう恐れもあるため大変危険である．\\
+　このような脅威における対策として，Web サイトや電子メールなどのサーバ管理者は常時脆弱性の調査と更新を行う必要があると考える．脅威については日々進化しているため，簡単に止めることは難しい．これより，管理する側においても調査・システムの更新を行い，常に機能を新しいものへと更新をすることで進化する脅威に対しての対策となると考える．また，DNS 問い合わせ利用時に安全性を確かめる制限をかけることで安全に通信することができると考える．
+
+
+\begin{thebibliography}{9} 
+\bibitem{bib:iptext}
+    竹下隆史・村山公保・荒井透・苅田幸雄 著，
+    ``マスタリング TCP/IP 入門編 第5版,''
+    株式会社 オーム社，2004．
+\bibitem{bib:dnstext}
+    Paul Albitz, Cricket Liu 著，
+    ``DNS&BIND 第3版,''
+    日経印刷株式会社，1999
+\bibitem{bib:mailtext}
+    Tom Adelstein, Bil Lubanovic 著，
+    ``Lunix システム管理,''
+    オーラリー・ジャパン，2007
+\bibitem{bib:nettext}
+    アンドリュー・S・タネンバウム 著，
+    ``コンピュータネットワーク,''
+    株式会社アビック，1999
+\bibitem{bib:mail}
+    亀田久和 著，
+    ``SEND MAiL,''
+    株式会社　秀和システム，1998 
+\end{thebibliography}
+
+\end{document}
