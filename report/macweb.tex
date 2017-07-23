@@ -1,0 +1,49 @@
+% -- 第4章作業記録(MacOSX) --
+\documentclass[a4j,titlepage]{jarticle}
+\usepackage[dvipdfmx]{graphicx}
+\usepackage{url}
+\usepackage{epsfig}
+\usepackage{ascmac}
+%\usepackage{here}
+
+\begin{document}
+
+\subsection{動作確認}
+作成した html ファイル(index, inside, basic)をブラウザ上で表示できるかの確認を行う．
+Basic については，http, https どちらも表示できるか確認する．
+
+% 0706
+\subsection{MacOS 動作確認}
+そのままでは HTML を閲覧することができないため，Safri の環境設定からプロキシ設定の変更を行う．\\
+Safri の環境設定 → 詳細 → 詳細を変更 → 「Web プロキシ(HTTP)」と「保護された Web プロキシ(HTTPS)」のチェック項目を外す．\\
+この作業により，閲覧が可能になり，自グループの HTML 文が表示される．
+
+% 0710 
+\subsection{MacOS 証明書の承認}
+\begin{enumerate}
+\item まず，以下よりルート認証局の証明書とし cacert.der ファイルをインストール
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+  http://www.g9.info.kochi-tech.ac.jp/cacert.der
+\end{verbatim}
+    \end{screen}
+  \end{center}
+
+\item 証明書の追加を問われるため，追加を選択
+
+\item 証明書をこれ以降信頼するように設定するか問われるため，「常に信頼」を選択し，パスワードとして root00 を入力
+
+\item グループホームページである
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+  https://www.g9.info.kochi-tech.ac.jp
+\end{verbatim}
+    \end{screen}
+  \end{center}
+にアクセスできるか確認し，表示できれば終了
+  
+\end{enumerate}
+
+\end{document}
