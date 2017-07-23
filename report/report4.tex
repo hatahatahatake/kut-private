@@ -1,0 +1,648 @@
+\documentclass[a4j,titlepage]{jarticle}
+\usepackage[dvipdfmx]{graphicx}
+\usepackage{url}
+\usepackage{epsfig}
+\usepackage{ascmac}
+\usepackage{here}
+%
+\title{情報学群実験第4C 第4章レポート\\　WWW システムと認証及び暗号化}
+\author{学籍番号 1190358\\
+        畠山 友華\\
+        グループ9}
+\date{\today}
+%% プリアンブルここまで
+
+%% 本文
+\begin{document}
+\maketitle
+\section{目的}
+% 背景からの実験の目的を記述
+% --- 背景 ---
+情報社会となっている現在では，単なる情報検索にとどまらず，情報検索，電子メール，SNS，地図やルート検索，ネットショッピング，ホテルやお店の予約など，膨大な量の Web サービスやコンテンツが WWW 上の元成り立っている．そのように，WWW とは World Wide Web の略でインターネットを利用する上で欠かせないサービスである．様々なサービスの基盤となっていることから，インターネット上のサービスインフラの一つとなっている．この WWW を通じて現在の Web サービスのような不特定多数に向けた情報の公開や共有が可能になったため，様々なジャンルの情報から繊細な情報を扱うものまでがある．\\
+% --- 目的 ---
+　このような背景から，WWW を介して提供されるサービスの中には限定された公開のみにする必要のあるものや取り扱いに注意するべきものもある．このように正当性を確認するための認証技術や第三者に内容がわからないように情報を変換する暗号化技術が併用される機会も増えている．暗号化技術は認証技術の基盤として用いられ，WWW 上のセキュリティ確保のための重要な役割を果たしている．
+
+
+\section{内容}
+% 2つの実験の行う内容
+WWW システムの情報を閲覧可能にするために，Web サービスを構築し，コンテンツを作成・公開する．また，WWWww を扱う上でセキュリティ確保のため認証・暗号化および認証局での証明書の作成を行う．\\
+　まず，Web サーバの構築を行う．サーバに対して，Web サーバ用のソフトウェアをインストールを行い，これを設定する．こうすることで Web サーバが構築される．次に，HTML ファイルとしてコンテンツを作成し，公開用ディレクトリへ配置する．その後公開したコンテンツが表示できるかの確認を各クライアントOS において行っていく．\\
+　また，WWW 上でのセキュリティ確保のために IP アドレスによるアクセス制限と Basic 認証によるユーザ認証の2種類のアクセス制限を行う．一部のページには2種類のアクセスを別々に実施し，1つはグループ内の IP アドレスからのみ接続可能に，もう1つは，ユーザ認証を行ったユーザのみが接続可能になるよう設定する．アクセス制限だけでなく，HTTPS サーバの設定を行い，SSL/TLS 通信に対応させる．\\
+　ただ HTTPS 通信を可能にしただけでは，サーバ証明書及びその秘密鍵として，サーバ名などが正しく設定されていない自己証明書が使われている．このままでは問題があるため，OpenSSL を用いて正式な証明書・秘密鍵を作成して運用する．
+
+
+\section{要素技術}
+ここでは，WWW(World Wide Web)サービスを利用する上で重要な役割を担っている「HTTP」，「HTML」プロトコルについての説明・解説をを行っていく．また，それらサービスを安全に利用するための認証および暗号化の際に用いられる「SSL」，「CA」についての説明・解説をを行っていく．
+
+\subsection{HTTP}
+HTTP(Hyper Text Protocol)は，コンピュータ同士がデータを共有するためのトランスポートプロトコルとして広く使われていた TCP/IP のスタック上に短期間で実装され，広まってきた\cite{bib:webtext}．\\
+ユーザがブラウザに Web ページの URI を入力すると HTTP の処理が開始される．HTTP では，通常80版ポート番号が利用されている．まず，クライアントからサーバにポート80番で TCP のコネクションの確立が行われる．その TCP の通信路を利用してコマンドや応答，データからなるメッセージの送受信が行われる．HTTP は図\ref{fig:http}のような仕組みによってサーバとのやり取りが行われている．\\
+
+  \begin{figure}[htbp]
+    \begin{center}
+      \resizebox{115mm}{!}{\includegraphics{http.png}}
+      \caption{HTTP の仕組み}
+     \label{fig:http}
+   \end{center}
+  \end{figure}
+
+HTTP では，主に HTTP1.0 と HTTP1.1 という2つのバージョンが利用されている．HTTP1.0 までは1つの「コマンド」や「応答」をやり取りするたびにコネクションで複数の「コマンド」や「応答」を確立しては切断を繰り返していた．一方で， HTPP1.1 からは1つの TCP により，TCP のコネクションでの複数の「コマンド」や「応答」ができるようになった．これにより，TCP のコネクションの確立や切断によるオーバーヘッドを減らすことができ，効率が上がった\cite{bib:iptext}．
+
+\subsubsection{HTML}
+www でよく見られる文書は HTML(Hyper Text Massage Protocol) と呼ばれる記述形式で書かれた文書である．HTML は ISO 標準8879,SGML(Standard Generalied Markup Language)の応用であり，ハイパーテキストに特化し,ウェブに適合されている\cite{htmltext}．\\
+ブラウザの画面に表示する文字や,文字の大きさ，位置，色などを指定することができる．また，画像や動画を画面に貼り付ける設定や音楽などの音を鳴らす設定もできる．ハイパーテキストとは，画面に表示する文字や絵にリンクを貼り，そこがクリックされたときに別の情報を表示することができる機能のことで,インターネット上のどの WWW サーバの情報にもリンクを貼ることができる．インターネット上の Web ページの多くには,関連する情報にリンクがはられている．これらをマウスでクリックして，次にリンクをたどれば世界中の情報を見ることができる．\\
+HTML は，WWW の共通データ表現プロトコルということができる．アーキテクチャの異なるコンピュータでも,HTML に従ったデータを用意しておけばほぼ同じように表示される．OSI 参照モデルに照らし合わせるならば HTML は WWW のプレゼンテーション層ということになる．ただし，現在のコンピュータネットワークのプレゼンテーション層は完全には整備されていないため，OS や利用するソフトウェアが違うと表示の細かい部分が異なってしまう場合がある\cite{bib:iptext}．\\
+実際に HTML を記述するときに利用するのが以下の表\ref{tab:html}のような HTML タグと呼ばれるものである．これらを組み合わせてウェブページを作っていく．
+
+
+\begin{table}[htbp]
+\caption{よく利用されるHTMLタグ}
+\label{tab:html}
+\begin{center}
+\begin{tabular}{|l|l|}
+  \hline
+  タグ & 説明 \\ \hline \hline
+  $<html>$...$</html>$ & ウェブページが HTML で記述されていることを宣言 \\ \hline
+  $<head>$...$</head>$ & ページヘッド部を指定 \\ \hline
+  $<title>$...$</title>$ & タイトルの定義(ページには表示されない) \\ \hline
+  $<body>$...$</body>$ & ページボディ部を指定 \\ \hline
+  $<b>$...$</b>$ & ...を太字に設定 \\ \hline
+  $<ul>$...$<ul>$ & 番号なし(黒丸のついた)リストを指定 \\ \hline
+  $<ol>$...$<ol>$ & 番号付きリストの設定 \\ \hline
+  $<br>$ & ここで強制改行 \\ \hline
+  $<p>$ & 段落の開始を表示 \\
+  \hline
+\end{tabular}
+\end{center}
+\end{table}
+
+
+\subsection{SSL}
+SSL とは，Secure Socket Layer の略であり，ネットワーク上に存在する様々な脅威からアプリケーションデータを守るプロトコルである．ネットワーク上では，住所や電話番号，クレジットカード番号や企業秘密など，ありとあらゆる情報がやり取りされている．そのような情報の悪用を防ぐために，SSL がある．SLL の機能によってクライアントとサーバ間のデータを暗号化したり認証したりしてデータを守る．ネット上で Web ブラウザの URL が「https://~」となって鍵マークが付いているものがこの SSL で暗号化されていることを表している．\\
+SSL はハイブリット暗号方式という暗号化方式によって暗号化される．ハイブリット暗号方式とは，暗号鍵と複合鍵に異なる鍵を使用する「公開鍵暗号方式」と暗号鍵と複合鍵に同じ鍵を使用する「共通鍵暗号方式」を組み合わせた暗号方式となっている．共通鍵暗号方式のメリットである高速処理と，公開鍵暗号方式のメリットである鍵配送問題の解決，この2つの暗号化方式のメリットをいいとこ取りした暗号化方式となっている\cite{bib:ssltext}．
+
+\subsection{CA}
+CA(認証局) とは，デジタル証明書に署名する機関である．CA を信頼するとしたら，その CA が署名したデジタル証明書も信頼することになる．CA は誰でもなることができ，自分のデジタル証明書に自分で署名することもできる．デジタル証明書には以下の3種類がある．\\
+
+\begin{description}
+\item[(1)自己署名証明書]\\ \mbox{}\\
+デジタル証明書手の所有者が CA となり，デジタル証明書に自分で署名する．このようなデジタル証明書で誰かの身元を確認することはできないため，ほとんど価値がないといわれている．ただし，SSL など状況によっては役立つことがある．
+  
+\item[(2)プライベート認証局が署名した証明書]\\ \mbox{}\\
+限られたユーザ間でのみ使用するデジタル証明書の場合は，そのグループが CA になるのがふさわしい事が多い．最近良く使用されるようになった社員証のようなものである．
+  
+\item[(3)パブリック認証局が署名した証明書]\\ \mbox{}\\
+関係者が希薄な大勢のユーザ間で信頼が必要な場合には，独立した CA を利用しなければならない．CA として活動している組織を信頼することに同意し，その CA がデジタル証明書に署名した全ての人物または組織の身元を確認を保証することになるため，これは一種の妥協策である．知名度の高い CA としては，Equifax, RSA, Thawte, VerSign が挙げられる．
+\end{description}
+
+デジタル証明書を使って他のデジタル証明書することも署名できる．これが CA の役割である．CA における非常に重要なデジタル証明書がルート証明書と呼ばれるものである.これは,他のデジタル証明書への署名に使われる.ルート証明書に署名するのはその CA 自体であり, CA が発行したデジタル証明書は有効なものとして扱われる.これらのデジタル証明書は使用する Web ブラウザによって配布される\cite{bib:apachetext}.
+
+
+\newpage
+
+%
+\section{作業記録}
+ここでは，
+
+\subsection{Web サーバの構築}
+Web サーバの構築として，世界中で使われており，高機能で安定した動作をする Apache を用いる．Server 用コンピュータである Ubuntu に，パッケージシステムを用いて Apache をインストールする．
+
+\item apacheのインストール
+以下より，スーパーユーザー化とプロキシの環境変数の設定を行い，Apacheをインストールする
+
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+$ sudo su
+# export http_proxy=http://192.168.0.1:7999
+# export https_proxy=http://192.168.0.1.7999 
+# apt install apache2
+\end{verbatim}
+    \end{screen}
+  \end{center}
+
+\end{itemize}
+
+\subsection{コンテンツの作成と公開}
+HTML によるコンテンツを サーバ上で作成し，公開用ディレクトリへ配置する．その，各クライアント OS によって Web ブラウザ上でそのコンテンツが表示できるか確認する． 
+
+\begin{enumerate}
+
+\item Webページにファイル名を指定せずにアクセスした場合，index.htmlというファイルがデフォルトで読み込まれる．今回は新たにHTMLファイルを作成し，index.htmlとして/var/www/htmlに保存する．その内容を以下に示す．
+
+  \begin{center}
+    \begin{itembox}[l]{index.html}
+\begin{verbatim}
+<thml>
+  <head>
+    <title>
+      HTML test
+    </title>
+  <head>
+   <body>
+     this is group9's html
+   </body>
+</html>
+\end{verbatim}
+    \end{itembox}
+  \end{center}
+\end{enumerate}
+ 
+  \subsubsection{CentOS によるコンテンツ表示確認}
+\begin{itemize}
+\item 左上にある「Applications」から「System Tools」→「Settings」の「Network」を選択した.\\
+\item 「Network proxy」から「Manual」のproxyを全て「192.168.0.1」としIPアドレスを全て「7999」とした.\\
+\item 「Manual」を「none」に変更して\\
+  http://www.g9.info.kochi-tech.ac.jp\\
+  と検索する.\\
+\end{itemize}
+
+  \subsubsection{Windows10 によるコンテンツ表示確認}
+Windows10では，WebブラウザであるInternet Explorerを用いてコンテンツの表示を行う．そのために，まずプロキシサーバを使用しないように設定する，次に，ブラウザのアドレスバーにコンテンツのURIを入力して表示する．その手順を以下で示す．
+
+\begin{enumerate}
+\item 左下のWindowsマークをクリックし，すべてのアプリからInternet Explorerを起動する．
+
+\item 「Alt」キーを押した後「T」キーを押すことで，「ツール(T)」を表示し，その中から「インターネット オプション(O)」を選択する．
+
+\item 「インターネット オプション」画面の上部にあるタブから「接続」を選択する．
+
+\item 「ローカル エリア ネットワーク (LAN) の設定」欄内にある「LAN の設定(L)」を選択する．
+
+\item 「プロキシ サーバー」欄内にある「LAN にプロキシ サーバーを使用する (これらの設定はダイヤルアップまたは VPN 接続には適用されません)(X)」のチェックを外す．
+
+\item 「OK」を押し，設定の変更を反映させる．
+
+\item 「OK」を押し，「インターネット オプション」を閉じる．
+
+\item ブラウザ上部のアドレスバーに，以下のURIを打ち込み「Enter」キーを押し，サーバで作成したHTMLコンテンツが表示されることを確認する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+http://www.g9.info.kochi-tech.ac.jp
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item BASIC認証を確認する．ブラウザ上部のアドレスバーに，以下のURIを打ち込み「Enter」キーを押し，ユーザ認証があることを確認する．そのとき，認証に成功するとHTMLコンテンツが表示され，失敗すると表示できないことを確認する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+http://www.g9.info.kochi-tech.ac.jp/basic
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item IPアドレスによるアクセス制限を確認する．ブラウザ上部のアドレスバーに，以下のURIを打ち込み「Enter」キーを押し，HTMLコンテンツが表示されることを確認する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+http://www.g9.info.kochi-tech.ac.jp/inside
+\end{verbatim}
+\end{center}
+\end{screen}
+\end{enumerate}
+
+
+
+  \subsubsection{MacOS によるコンテンツ表示確認}
+そのままでは HTML を閲覧することができないため，Safri の環境設定からプロキシ設定の変更を行う．\\
+Safri の環境設定 → 詳細 → 詳細を変更 → 「Web プロキシ(HTTP)」と「保護された Web プロキシ(HTTPS)」のチェック項目を外す．\\
+この作業により，閲覧が可能になり，自グループの HTML 文が表示される．
+
+
+  \subsubsection{Windows7 によるコンテンツ表示確認}
+  \item プロキシーサーバの変更
+  \begin{enumerate}
+\item IE を開き「設定」の「インターネットオプション」を開く.
+\item 「接続」タブを開き，「ローカルエリアネットワークの設定」欄の「LAN の設定」を選択.
+\item  プロキシサーバ欄の「LANにプロキシサーバを使用する」のチェックを外 して「OK」を選択.
+  \end{enumerate}
+  
+  \subsection{Web サーバでの認証設定}
+  サーバ上にて，2種類のアクセス制限の設定を行い，その通信をモニタする．\\
+  \begin{itemize}
+  \item HTTP の接続元の IP アドレスによるアクセス制限
+
+  \item Basic 認証によるユーザ認証
+
+  \end{itemize}
+一部のページには，2種類のアクセス制限を別々にディレクトリに実施し，1つはグループ内の IP アドレスからのみ接続可能に，もう1つは，ユーザ認証を行ったユーザのみが接続可能になるよう設定する．
+  
+  
+\begin{itemize}
+\item HTTP認証（BASIC）の設定
+
+ユーザ，パスワードを用いての認証つきアクセスの設定を行う．
+
+まず，.htpasswdというファイルに``testuser"というユーザを作成し，パスワードを設定する．
+
+\begin{center}
+\begin{screen}
+\begin{verbatim}
+# htpasswd -c /etc/apache2/.htpasswd testuser
+\end{verbatim}
+\end{screen}
+\end{center}
+
+/var/www/htmlの下にbasicというファイルを作成し，アクセス制限をかける．
+
+/etc/apache2/sites-availableの000-default.confというファイルに設定を追加する．
+
+\begin{center}
+\begin{screen}
+\begin{verbatim}
+# vi /etc/apache2/sites-available/000-default.conf
+
+<Directory /var/www/html/basic>
+        AuthType Basic
+        AuthUserFile /etc/apache2/.htpasswd
+        AuthName "basic auth"
+    
+        Satisfy any
+        Order deny,allow
+        Deny from all
+        Require valid-user
+</Directory>
+\end{verbatim}
+\end{screen}
+\end{center}
+
+\item IPアドレスによるアクセス制限の設定
+
+同グループのメンバのみ閲覧できるよう，IPアドレスによる制限をかける．
+
+/var/www/htmlの下にinsideというファイルを作成し，アクセス制限をかける．
+\begin{center}
+\begin{screen}
+\begin{verbatim}
+# vi /etc/apache2/sites-available/000-default.conf
+
+<Directory /var/www/html/basic>
+        Order deny,allow
+        Deny from all
+        Allow from 172.21.19.0/24
+</Directory>
+\end{verbatim}
+\end{screen}
+\end{center}
+
+\end{itemize}
+
+ここまでの設定により，ユーザー名とパスワードによる認証，IPアドレスによる認証が行えるようになった．
+
+\end{itemize}
+\end{enumerate}
+
+\subsection{Wireshark によるパケットモニタ}
+ここでは 認証された通信の確認として Windows10, Windows7 において Wireshark によるパケットモニタの確認を行っていく．\\ 
+　Wireshark は高機能パケットキャプチャ(捕捉)・アナライザ(解析)である．スニファ(嗅ぐ)などとも呼ばれる．LAN のパケットを調査する用途に用いるが，クラキングツールにも悪用できるものであり，取り扱いには注意する．\\
+　プログラムはインターネットからもダウンロードできるが，メインサーバの FTP サイトにも置いてある．Cent 等ではソフトウェアインストールの画面からインストール可能である．\\
+これを用いて，HTTP のリクエスト・レスポンスの過程や，Basic 認証の際のパスワードのパケット内での取り扱いを確認する．\\
+
+  
+\subsubsection{Windows10 の Wireshark 設定}
+
+\begin{enumerate}
+\item Windows10 における Wireshark のインストール
+
+\begin{itemize}
+\item アドレスバーに以下のURIを入力し，Wireshark-win64-1.8.6のインストーラーを保存する
+
+\item 保存したファイルを実行する．
+
+\item アプリが PC に変更を加えることを許可するかどうか聞かれるので，「はい(Y)」を選択する．
+
+\item セットアップウィザードが表示されるので，「Next $>$」，「I Agree」，「Next $>$」，「Next $>$」，「Next $>$」，「Install」と選択する．これらの選択が終わると，Wiresharkのインストールが始まる．
+
+\item Wiresharkのインストールの途中で，WinPcapのインストールウィザードが表示されるので，「Next $>$」，「Next $>$」，「I Agree」，「Install」と選択する．これらの選択が終わると，WinPcapのインストールが始まる．
+
+\item WinPcapのインストールが終わった後，「Finish」を選択する．
+
+\item Wiresharkのインストールが再開される．インストールが終わった後，「Next $>$」，「Finish」と選択し，インストールウィザードを終了する．
+
+\end{itemize}
+
+
+\item 通信のモニタ
+Wireshark1.8.6を使用して，BASIC認証をHTTP，HTTPそれぞれを用いたときの通信をモニタする．その手順を以下に示す．
+
+\begin{itemize}
+
+\item Wiresharkの実行ファイルを起動する．
+
+\item メニューバーの「Capture」から「Interfaces...」を選択する．
+
+\item 「Intel(R) 82567V-2 Gigabit Network Connection」ただひとつが表示されるので，その左端にチェックを入れ，「Start」を選択する．
+
+\item Internet Explorerから自グループのBASIC認証ページにHTTP接続し，ユーザ認証をしてページを表示する．
+
+\item Wireshark画面で，「Filter」バーにHTTPと入力してEnterキーを押し，HTTP通信のモニタのみを表示させる．
+
+\item 上部にある画面から，GETメソッドによるリクエストのうち一番下にあるものを選択する．その後，下部の詳細画面から，「Hypertext Transfer Protocol」，「Authorization: Basic ...」と選択し，ユーザ認証時に入力したものが表示されていることを確認する．
+
+\item Internet Explorerから自グループのBASIC認証ページにHTTPS接続し，ユーザ認証をしてページを表示する．
+
+\item Wireshark画面で，「Filter」バーにTLSと入力してEnterキーを押し，HTTP通信のモニタのみを表示させる．
+
+\item 上部にある画面から，「Application Data」であるもののうち一番下にあるものを選択する．その後，下部の詳細画面から，ユーザ認証時に入力したものは表示されないことを確認する．
+\end{itemize}
+\end{enumerate}
+
+
+
+\subsubsection{Windows7 における Wireshark}
+
+\begin{itemize}
+  \item Wiresharkのインストール
+\begin{enumerate}
+\item IEからアドレスバーにftp://192.168.0.1を入力
+\item Windows7 32bit版を保存
+  \item 保存したファイルを開き，「ユーザーアカウント制御」では「はい」を選択.
+
+\item 「Welcome to the Wireshark ...」では説明を読み「Next」を選択.
+\item「License Agreement」では説明を読み「I Agree」を選択.
+\item 「Choose Components」では変更せずに「Next」を選択.
+\item 「Select Additional Tasks」では「Desktop Icon」にチェックを加えて「Next」を選択 .
+\item 「Choose Install Location」では変更せず「Next」を選択.
+\item 「Install WinPcap?」では変更せず「Install」を選択.
+\item 「Welcome to the WinPcap ...」では説明を読み「Next」を選択.
+\item 「License Agreement」では説明を読み「I Agree」を選択.
+\item 「Installation options」では変更せずに「Install」を選択.
+\item Completing the WinPcap ...」では「Finish」を選択.
+\item 「Installation Complete」ではゲージが溜まった後「Next」を選択.
+\item 「Completiong the Wireshark ...」では変更せず「Finish」を選択.
+\end{enumerate}
+\item Wireshark による動作確認
+  \begin{enumerate}
+    \item デスクトップのアイコンから Wireshark を起動する.
+\item 「Capture」欄の「Start」下から「ローカルエリア接続」を選択し，「Start」を選択する. \item IE を開き，アドレスバーにhttp://www.g9.info.kochi-tech.ac.jp/test1/test1.htmlに入力.
+\item 「ユーザ名」と「パスワード」を入力する.
+\item  Web ページ表示後，F5 キーを押して数回更新する.
+\item 「Stop the running live capture」(赤い四角) を選択して実行を停止する.
+\item 「Filter」の検索バーに「http」を入力し，Enter キーを押す.
+\item Windows7 の場合は図 2 のように表示された (Windows8.1 でも大差ない). 9. 「No.115」を選択して詳細を開き「Hypertext Transfer Protocol」, 「Authorization: Basic cm9vdDpyb290MDA= r n」を選択する.
+\item 選択後，入力した「ユーザ名」と「パスワード」が表示された.
+\end{enumerate}
+\end{itemize}
+
+%
+\subsection{HTTPS サーバの設定}
+ここでは，HTTPSによる通信の暗号化を行う．
+まず，UbuntuのApacheでSSH/TLSを有効にするために以下の操作を行う．
+\begin{center}
+\begin{screen}
+\begin{verbatim}
+# a2enmod ssl
+# a2ensite default-ssl
+# systemctl restart apache2
+\end{verbatim}
+\end{screen}
+\end{center}
+
+%
+\subsection{認証局による証明書の署名}
+Ubuntu 標準手順での TLS 対応設定では，サーバ証明書およびその秘密鍵として，サーバ名などが正しく設定されていない self-signed (自己署名)証明書が使われている．このままでは問題があるため，OpenSSL を用いてh正式な証明書・秘密鍵を作成して運用する．その手順は以下の通りである．\\
+\begin{itemize}
+\item OpenSSL による秘密鍵・公開鍵の作成と配置
+
+\item 公開鍵を用いて，証明書を作成
+
+\item Apache で秘密鍵・証明書を指定
+\end{itemize}
+
+　本来作成した証明書は，然るべき認証機関にて，所定の費用を支払うなどして署名されるひつようがある．この方法が通常の機関で行われる運用である．サーヴァを複数台運用する場合は，中間認証局を設置しその認証局証明書が上位認証局やルート認証局にて署名された後，各サーバの証明書中間認証局で署名する．次に2つ目の方法として，大学などの小規模機関では，独自のルート認証局を設置し機関内のクライアントに安全な手段でルート証明書を配布・インストールして運用する場合もある．ここでは，この法を用いることとし，サーバで認証局を設置し，認証局の証明書をルート証明書としてクライアントにインストールし，サーバ証明書を認証局で署名して用いる．\\
+
+%
+\subsubsection{サーバにおける証明書の作成}
+\begin{enumerate}
+\item 認証局の作成
+\begin{itemize}
+\item CAのディレクトリを作成
+
+ルートCAが証明書などを保存するディレクトリを作成する．
+\begin{center}
+\begin{screen}
+\begin{verbatim}
+# cd /etc/ssl
+# mkdir CA
+# mkdir newcerts
+\end{verbatim}
+\end{screen}
+\end{center}
+
+次に，ディレクトリCAにて，証明書を番号付けて管理するためのシリアルファイルを作成する．また，証明書発行情報を保存するデータベースファイル，index.txtを作成する．
+
+\begin{center}
+\begin{screen}
+\begin{verbatim}
+# cd CA
+# echo 01 > serial
+# touch index.txt
+\end{verbatim}
+\end{screen}
+\end{center}
+
+次に，/etc/ssl/openssl.cnfのCAセクションを編集する．
+
+\begin{center}
+\begin{screen}
+\begin{verbatim}
+# cd ..
+# vi openssl.cnf
+
+[ CA_fefault ]
+dir            =  /etc/ssl
+database       =  $dir/CA/index.txt
+certificate    = $dir/certs/cacert.pem
+serial         = $dir/CA/serial
+private_key    = $dir/private/cakey.pem
+\end{verbatim}
+\end{screen}
+\end{center}
+
+\item CA証明書と秘密鍵の作成
+
+CAの秘密鍵を作成する．鍵長は2048とする．
+
+\begin{center}
+\begin{screen}
+\begin{verbatim}
+# openssl genrsa -out cakey.pem 2048
+\end{verbatim}
+\end{screen}
+\end{center}
+
+次に，秘密鍵に対応する証明書要求を作成する．
+
+ここで，証明書の内容（国や地域，期間，ホスト名等）を聞かれるので入力する．
+
+\begin{center}
+\begin{screen}
+\begin{verbatim}
+# openssl req -new -key cakey.pem -out careq.pem
+
+----
+Country Name (2 letter code) [AU]:JP
+State or Province Name (full name) [Some-State]:Kochi
+Locality Name (eg, city) []:Kami-shi
+Organization Name (eg, company) [Internet Widgits Pty Ltd]:KUT
+Organizational Unit Name (eg, section) []:information
+Common Name (e.g. server FQDN or YOUR name) []:
+ www.g9.info.kochi-tech.ac.jp
+Email Address []:exp@g9.info.kochi-tech.ac.jp
+
+A challengepassword []: この項目は設定しない
+An optional company name []: この項目は設定しない
+\end{verbatim}
+\end{screen}
+\end{center}
+
+秘密鍵を/etc/ssl/privateに置き，careq.pemで自己証明する
+
+\begin{center}
+\begin{screen}
+\begin{verbatim}
+# mv cakey.pem private/
+# openssl ca -in careq.pem -out cacert.pem -selfsign -days 365
+  -extensions v3_ca -batch
+\end{verbatim}
+\end{screen}
+\end{center}
+
+次に，作成されたCAのルート証明書cacert.pemをPEM形式からブラウザで読み込めるDER形式に変換する．
+
+\begin{center}
+\begin{screen}
+\begin{verbatim}
+# openssl x509 -in cacert.pem -text | less
+# openssl x509 -in cacert.pem -outform DER -out cacert.cer
+# mv cacert.der /var/www/html
+# mv cacert.pem cert
+\end{verbatim}
+\end{screen}
+\end{center}
+
+
+\end{itemize}
+\end{enumerate}
+
+\subsubsection{CentOS での証明書の承認}
+\begin{itemize}
+  
+\item Firefoxを用いて\\
+  http://www.g9.info.kochi-tech.ac.jp/cacert.der\\
+  にアクセスすると,３つ項目が出てくるので全てにチェックを入れてインストールする.\\
+
+\item https://www.g9.info.kochi-tech.ac.jp\\
+  と検索すると「this is group9's html」と表示される.\\
+
+\end{itemize}
+
+\subsubsection{Windows10 での証明書の承認}
+以下の手順でWebブラウザであるInternet ExplorerにCAのルート証明書をインストールする．
+
+\begin{enumerate}
+\item アドレスバーに以下のURIを入力し，cacert.derを表示する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+http://www.g9.info.kochi-tech.ac.jp/cacert.der
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item ブラウザ画面の戻る・進むボタンやアドレスバーなどがある上部の背景にポインタを移動し，右クリックで現れるメニューから「メニューバー」を選択する．これにより，ブラウザ上部にメニューバーが常に表示される．
+
+\item メニューバーから「ファイル(F)」，「名前を付けて保存(A)...」と選択する．
+
+\item ファイル名を「cacert.der」，ファイルの種類を「テキスト ファイル (*.txt)」にしてドキュメントフォルダに保存する．
+
+\item ブラウザ画面上部の右端にある歯車マークをクリックし，「インターネット オプション(O)」を選択する．
+
+\item インターネット オプションの画面から「コンテンツ」タブを選択する．
+
+\item 画面上部の「証明書(C)」を選択する．
+
+\item 証明書の画面から，「信頼されたルート証明機関」タブを選択する．
+
+\item 画面左下にある「インポート(I)...」を選択する．
+
+\item 証明書のインポート ウィザードの開始という画面が表示されるので，「次へ(N)」を選択する．
+
+\item 「参照(R)...」を選択する．
+
+\item ドキュメントフォルダから先ほど保存したcacert.derを選択し，「開く(O)」を押す．
+
+\item cacert.derが指定されていることを確認し，「次へ(N)」を選択する．
+
+\item 「証明書をすべて次のストアに配置する(P)」を選択し，証明書ストアの参照先が「信頼されたルート証明機関」になっていることを確認して「次へ(N)」を押す．
+
+\item 証明書のインポート ウィザードの完了と表示されるので，「完了(F)」を選択する．
+
+\item セキュリティ警告として，証明書をインストールするかどうか聞かれるので，「はい(Y)」を選択する．
+
+\item 証明書が正しくインポートされたと表示されるので，「OK」を選択する．
+
+\end{enumerate}
+
+\subsubsection{MacOS での証明書の承認}
+\begin{enumerate}
+\item まず，以下よりルート認証局の証明書とし cacert.der ファイルをインストール
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+  http://www.g9.info.kochi-tech.ac.jp/cacert.der
+\end{verbatim}
+    \end{screen}
+  \end{center}
+
+\item 証明書の追加を問われるため，追加を選択
+
+\item 証明書をこれ以降信頼するように設定するか問われるため，「常に信頼」を選択し，パスワードとして root00 を入力
+\end{enumerate}
+
+
+\subsection{HTTPS 通信のモニタ}
+ 
+アドレスバーに以下のURIを入力し，HTTP通信のときと同様のWebページが表示されるか確認する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+https://www.g9.info.kochi-tech.ac.jp
+\end{verbatim}
+\end{center}
+\end{screen}
+
+
+\newpage
+\section{考察}
+WWW の普及によって，情報公開にとどまらず，情報検索から SNS におけるチャットのやり取り，ネットショッピング，情報共有まで多彩な事が利用可能になっている．WWW を介して提供されるサービスには繊細な情報を扱うものがあり，IP アドレスの制限や認証・暗号化技術を用いてセキュリティ確保する必要がある．その理由として，サービスが簡単になるということは悪意のある人が簡単になりすまし・乗っ取りなどといったこともできるようになるということでもあり情報技術の進歩に伴い，悪用の手口も最新のものになっている事が挙げられる．安全に有益なサービスを利用するために利用者側での適切な対策が必要となってくる．\\
+　Web サービスを利用する際に SNS やネットショッピングなどで自分専用の情報ページを記入する欄がありもちろん，それにログインするためにはメールアドレスやパスワードといった個人情報の入力が必須である．このとき，メールアドレスはもちろんパスワードが第三者に知られてはなりすましなど行い易く，悪用されてしまう．悪用されないようにパスワードの設定について認識と技術によって変えていく必要があると考える．\\
+　例えば，パスワード更新についてである．パスワード設定時に自分の誕生日や電話番号など個人を識別できるような情報で設置してしまいがちである．それでは，何かで個人情報が少しでも知られたら特定可能になってしまう．また，パスワードを使い回すなど簡単だからといってど一定のパスワードをずっと使ってしまう場合もある．そのような場合の安全性を高めるためにも，パスワードを随時更新していく必要がある．パスワード更新を忘れてしまわないためにも，セキュリティレベルの高いパスワード管理アプリなど管理システムを作成し，更新を促す等適応すると改善することができると考える．
+
+
+\begin{thebibliography}{9}
+\bibitem{bib:iptext}
+    竹下隆史・村山公保・荒井透・苅田幸雄 著，
+    ``マスタリング TCP/IP 入門編 第5版,''
+    株式会社 オーム社，2004．
+\bibitem{bib:webtext}
+    グラハム・グラス 著，
+    ``Web サービス入門 Javaを使って覚える簡単SOAP, WSDL, UDDIプログラミング,''
+    株式会社ピアソン・エデュケーション，2002
+\bibitem{bib:apchetext}
+    Jvan Ristic(アイヴァン・リスティク) 著，
+    ``Apache セキュリティ,''
+    株式会社オーラリー・ジャパン，2005
+\bibitem{bib:htmltext}
+    アンドリュー・S・タネンバウム 著，
+    ``コンピュータネットワーク 第3版,''
+    株式会社アビック，1999
+\bibitem{bib:ssltext}
+    みやた ひろし 著，
+    ``インフラ/ネットワークエンジニアのための　ネットワーク技術&設計入門,''
+    株式会社シナノ，2013 
+\end{thebibliography}
+
+\end{document}
