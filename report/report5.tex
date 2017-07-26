@@ -1,0 +1,1055 @@
+\documentclass[a4j,titlepage]{jarticle}
+\usepackage[dvipdfmx]{graphicx}
+\usepackage{url}
+\usepackage{epsfig}
+\usepackage{ascmac}
+\usepackage{here}
+%
+\title{情報学群実験第4C 第5章レポート\\　データベース・Web システム}
+\author{学籍番号 1190358\\
+        畠山 友華\\
+        グループ9}
+\date{\today}
+%% プリアンブルここまで
+
+%% 本文
+\begin{document}
+\maketitle
+\section{目的}
+% 背景からの実験の目的を記述
+% --- 背景 ---
+現在，様々な Web コンテンツやアプリケーションが開発・利用されインターネットと共に生活に馴染みのあるものとして知られている．\\
+　Web コンテンツを提供するための技術として静的コンテンツと動的コンテンツがある．Web サーバは要求されたデータをブラウザに返すだけの静的コンテンツに対して，動的コンテンツはWeb サーバ上でプログラムを実行される分プログラム実行時に伴う CPU などの負荷がかかり比較的応答速度が遅いという性質がある．しかし最近では，Web ブラウザ上でクライアントに検索したり情報を閲覧する際に，そのような機能を持つ動的コンテンツを用いるシステムは多くの場所で活用され，リクエストに応じたコンテンツの提供を可能にする．また，ここでは多くのデータの書き込みや読み込み・管理などの目的からデータベースと連携していくことが重要となっている．
+% --- 目的 ---
+ここでは，Web コンテンツの提供を可能にするための動的コンテンツの導入と設定を行うことを目的とする．データの更新を行う Web システムの実装については，データの書き込みや読み込みにおいてデータベースシステムを用いる必要がある．データベースを構築し，管理システムを導入して運用していくことでデータの管理から Web システムの運用まで円滑に進めていくことが可能になる．
+
+
+\section{内容}
+% 2つの実験の行う内容
+現在，組織内ネットワークやインターネットと言ったネットワークを介して Web システムをコンテンツとして提供される事が多い．その動的コンテンツ生成のためのインストールから設定を行う．また，ここで Web システムにおいてデータ管理を行うためのデータベースをインストールし SQL 操作を行う．\\
+　Web システムはクライアントからの要求に応じて様々なコンテンツを提供することを目的としている．その Web システムの構造と流れに関して，以下の図\ref{fig:websysytem}のように，まず静的コンテンツである HTML ファイル・画像などの送受信と クライアントの Web ブラウザからの要求に応じて，必要ならばAP(アプリケーション)サーバに要求をする．要求を受けた AP サーバは要求に応じて処理を実行し，DB(データベース)サーバから必要な情報を取得してして Web サーバに返答をする．一番必要となってくるものとしてデータベース管理システムのとして AP サーバの要求を受けて編集を行う DB(データベース)サーバがある．この３つのサーバの連携によって Web システムは成り立っている．また，Web サーバと AP サーバはまとめて行う場合もあるため，2つをまとめて Web アプリケーションサーバという．
+
+\newpage
+  \begin{figure}[htbp]
+    \begin{center}
+      \resizebox{120mm}{!}{\includegraphics{web.png}}
+      \caption{Web システムの構造}
+     \label{fig:websysytem}
+   \end{center}
+  \end{figure}
+
+まず，データベースを用いてデータ管理を行うため，RDBMS をインストールし，データベースの操作を行っていく．その際，データベース操作に伴う運用データの入力に日本語が必要であるなら，サーバに接続して適切なものへと設定作業を行う．それから，クライアントPCからサーバにインストールしたデータベースへと接続してデータベース管理のための操作を行う．設定した文字コード・RDBMS の入力方法に注意してデータの追加や抽出などといったデータ入力を行う．\\
+　データベースシステムの構築が完了したら，Web システムにより動的コンテンツの導入を行う．動的コンテンツ配信のための Web システムとして「PHP」,「CGI」,「SSI」,「MediaWiki」,「WordPress」といった技術が存在する．これらを用いた動的コンテンツを実行するため，各種インストールと設定をしていき，コンテンツを編集・閲覧できるようにする．
+
+
+\section{要素技術}
+ここでは，Web システムの提供やデータの管理を行うために用いられる技術である「Cookie」,「CGI」,「RCB」,「SQL」について解説・説明を行っていく．
+
+%
+\subsection{Cookie}
+Cookie とは，セッション維持やユーザ情報の保持に対して用いられる．Cookie が用いられる仕組みとしては，Web アプリケーションサーバが HTTP の Set-Cookie ヘッダ部分に対してクライアントに ID を付与し，その付与された ID をキーとして Cookie 情報を保持するという形になっている．この他にも，ショッピングサイトなどで利用されている「買い物カゴ」のように，Cookie に保持されている ID とデータを紐付けし，それらをサーバ側で格納する．このとき，クライアントから ID にひも付けされたデータの読み出し要求があれば，サーバでは Cookie に保持された ID からデータを探しだし，クライアントに送信する仕組みとなっている\cite{bib:cookietext}．\\
+ Cookieを利用するサイトは，この保存している情報によって提供されるコンテンツが変化することにより，動的コンテンツであるといえる．Cookie は，動的コンテンツを利用する上での有名な技術となっている．
+
+
+\subsection{CGI}
+CGL(Common Gateway Interface)は，Web サーバが外部プログラムを呼び出すサービスサイドアプリケーションの仕組みのことである．\\
+　通常の Web 通信は，クライアントから要求に応じて Web サーバのハードディスクに格納されているデータが転送される．この場合に，クライアントに転送されるのはいつも同じ情報(静的な情報)である．CGI を使うと，クライアントからの要求に応じて Web サーバ側で別の外部プログラムが起動され，そのプログラムにユーザが入力した情報が与えられる．その情報を外部プログラムが処理して作成した HTML やその他のデータがクライアント側に転送される．また，Web サーバの内部にサーバプログラムが組み込まれていたり，インタプリタ型言語で書かれたプログラムを解釈・実行するインタプリタが Web サーバに組み込まれている場合も存在する．\\
+　CGI を用いることで，ユーザの操作に応じて様々に変化する情報(静的な情報)を転送することができる．掲示板やネットショッピングなどの中には CGI を使用して外部プログラムを呼び出したり，データベースにアクセスしたりしているものがある\cite{bib:iptext}．
+
+
+%
+\subsection{RDB}
+RDB(Relational DataBase:リレーショナル・データベース)は，複数のテーブルの間でキーを介して新たなデータの関係を見出すことを可能にするデータベースのことである．一般にデータモデルは次の3つから成り立っている．\\
+
+\begin{itemize}
+\item データやデータ間の関連を表現する構造記述
+
+\item データやデータ間に存在する意味記述
+
+\item データを検索したり亢進したり磨るためのデータ操作言語
+\end{itemize}
+
+　RDB の各テーブルには，テーブル内の一行を一意に識別するための情報である主キー(primary key)と，エンティティを完全に説明するために必要が含まれる．リレーショナルとは関係のことであり，数学の集合を基にした関係の集まりとしてデータを捉える．RDB は，表形式でのデータ管理を行う．\\
+　ネットワークデータベースはデータやデータ間の関連を表すためにレコードと親子集合という2つの基本要素を持ち込んでいる．それと対照的に，集合論を用いた関係の表として扱うため，データとデータ間の関係を見出すことが容易になる\cite{bib:sqltext}\cite{bib:rdbtext}．
+
+%
+\subsection{SQL}
+SQL(Structured Query Language:構造化組み合わせ言語)は，リレーショナル・データベースを操作する言語として1970年に登場した．SQL は，リレーショナル・データベースの定義・設定やオブジェクト操作を行うための「非手続き型言語」である． \\
+　SQL には多数のコマンド分(SELECT 文や DELETE 文，ALTER SYTEM 文など)が含まれるが，これらのコマンド文は実行する作業の内容によって大きく以下の3種類に分類される．\\
+
+\begin{itemize}
+\item データ操作(DML)
+  \begin{itemize}
+  \item テーブルに対するデータの参照・挿入・更新・削除
+  \item テーブルの結合，集合操作
+\end{itemize}
+  
+\item データ制御(DCL)
+  \begin{itemize}
+  \item 更x新の確定・取り出し
+
+  \item データベースに対する制御 
+
+  \end{itemize}
+
+\item データ定義(DDL)
+\begin{itemize}
+\item オブジェクト(テーブル，索引，ビュー)などの作成・更新・削除
+
+\item 制約や権限の付与・取り消し
+ 
+\item プロシージャ，ファンクション，トリガーの作成・変更・削除
+  
+\end{itemize}
+\end{itemize}
+
+これらの作業によりデータの設定・管理を行う．また，BEGIN, COMMIT, ROLLBACK(データの一貫性を確保するためのトランザクション)これらのコマンドを用いることにより，データベースの管理が可能になる\cite{bib:sql2text}．
+
+\newpage
+
+%
+\section{作業記録}
+ここでは，データベース・Web システム(CGI,SSI,MediaWiki)のインストールと設定を行う手順を以下に記す．
+
+\subsection{データベースの構築と操作}
+ここでは，データベースの操作を行うためにまず Ubuntu サーバにおいてデータベースシステムの導入と構築を行い，日本語入力が可能である Windows7 のラップトップによってデータベースの入力や抽出などといった操作を行っていく．
+
+
+\subsubsection{データベースの構築}
+Ubuntu サーバにおいて，データ管理を行うためのデータベースの構築を行う．
+\begin{itemize}
+  \item 漢字コード・改行コード変換フィルタをサーバにパッケージからインストールする.\\
+\begin{screen}
+    \begin{center}
+\begin{verbatim}
+# export http_proxy=http://192.168.0.1:7999
+# export https_proxy=http://192.168.0.1:7999
+# apt install nkf
+\end{verbatim}
+    \end{center}
+  \end{screen}
+
+\item ftpにて３つのCSVファイルをダウンロードする.\\
+  \begin{screen}
+    \begin{center}
+\begin{verbatim}
+# ftp 192.168.0.1
+Name: anonymous
+Password: root00
+# cd /pub/data
+# get uriage.csv tanka.csv bunrui.csv
+\end{verbatim}
+    \end{center}
+  \end{screen}
+
+\item 作成した３つのCSVファイルをviコマンドで編集し1行目を削除する.\\
+
+\item SHELLの環境変数による言語設定,localeコマンドで用いられる変数を閲覧できる\\
+   \begin{screen}
+    \begin{center}
+\begin{verbatim}
+# locale
+LANG=ja_JP.eucJP
+      .
+      .
+      .
+LC_ALL=
+\end{verbatim}
+    \end{center}
+  \end{screen}
+
+\subsubsection{MySQLのインストール}
+以下の手順でWebサーバにMySQLをインストールする．
+\begin{enumerate}
+
+\item 以下を実行し，管理者権限になる．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+$ sudo su
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item 以下を実行し，HTTPプロキシの環境変数を設定する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+# export http_proxy=http://192.168.0.1:7999
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item 以下を実行し，サーバ用のMySQLをインストールする．その途中でMySQL用の管理者アカウントのパスワードを問われるので，root00と入力する（入力後，確認用にもう一度同じパスワードを入力する）．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+# apt install mysql-server
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item /etc/mysql/conf.d/mysql.cnfをviエディタで開き，以下を末尾に追加する．
+
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+default-character-set=utf8
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item /etc/mysql/mysql.conf.d/mysqld.cnfをviエディタで開き，以下を末尾に追加する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+character-set-server=utf8
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item 以下を実行し，MySQLを再起動する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+# systemctl restart mysql
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\end{enumerate}
+
+\subsubsection{MySQL でのデータベース設定と操作}
+% MySQLでのデータベース操作
+日本語のデータベースを構築するため，日本語の入出力が可能なWindowsのPuttyで作業を行う．
+
+\begin{itemize}
+\item puttyの設定
+\begin{itemize}
+\item 「Window」→「変換（Translation）」→「Remote Character Set」を「UTF-8」
+\item 「セッション」→「接続タイプ」を「ssh」
+\item Serverにログイン
+\end{itemize}
+
+以後サーバーでの操作
+
+\item 漢字コード・改行コードをインストール
+
+\begin{center}
+\begin{screen}
+\begin{verbatim}
+$ sudo su
+# export http_proxy=http://192.168.0.1:7999
+# apt install nkf
+\end{verbatim}
+\end{screen}
+\end{center}
+
+\item ftpで3つのCSVファイル（bunrui.csv，tanka.csv，uriage.csv）をダウンロード
+\begin{center}
+\begin{screen}
+\begin{verbatim}
+# ftp 192.168.0.1
+anonymous
+> bin
+> ce /pub/data
+> get bunrui.csv
+> get tanka.csv
+> get uriage.csv
+\end{verbatim}
+\end{screen}
+\end{center}
+
+\item CSVファイルの設定
+
+\begin{center}
+\begin{screen}
+\begin{verbatim}
+# nkf -w -Lu < bunrui.csv > bunrui2.csv
+\end{verbatim}
+他のCSVファイルについても同様に実行
+\end{screen}
+\end{center}
+
+この処理により出力がUTF-8のUNIX改行となった．
+また，各データファイルの先頭行には各列のタイトルが入っている．MySQLにインポートする際には不要なため削除する．
+
+\item データベースの作成
+
+データベースにユーザー名「root」で接続し，データベースsalesと3つのテーブルを作成する．
+\begin{center}
+\begin{screen}
+\begin{verbatim}
+# mysql -u root -p
+mysql> create database sales;
+mysql> use sales;
+mysql> create table sales (
+    -> data text,
+    -> food text,
+    -> amount integer );
+mysql> create table price (
+    -> foodtext,
+    -> fee integer );
+mysql> create table foodgroup (
+    -> food text,
+    -> foodgroup text );
+mysql> exit
+\end{verbatim}
+\end{screen}
+\end{center}
+
+\item CSVファイルのインポート
+
+日本語コード及び改行コードを変換し，1行目を削除したCSVファイルをインポートする．
+
+\begin{center}
+\begin{screen}
+\begin{verbatim}
+# mysql -u root --local-infile=1 -p
+mysql> use sales;
+mysql> load data local infile "uriage2.csv" into table
+ sales fields terminated by ',';
+mysql> load data local infile "tanka.csv2" into table price
+ fields termimnated by ',';
+mysql> load data local infile "bunrui.csv2" into table
+ foodgroup fields terminated by ',';
+\end{verbatim}
+\end{screen}
+\end{center}
+
+
+\end{itemize}
+
+\subsubsection{データベースの操作}
+
+SQL言語によってテーブル内のデータが操作できることを確認する．
+
+\begin{itemize}
+\item データの追加
+
+\begin{itemize}
+\item テーブルsalesの2006/12/31の売り上げにあるサイダー2本を削除し，同日のオレンジジュースを2本追加する．
+
+\begin{center}
+\begin{screen}
+\begin{verbatim}
+# mysql> select * from sales;
++------------+--------------------------+--------+
+| data       | food                     | amount |
++------------+--------------------------+--------+
+| 2006/12/25 | 味噌ラーメン             |     21 |
+| 2006/12/25 | ラーメン                 |     36 |
+| 2006/12/25 | タンメン                 |     17 |
+| 2006/12/25 | もやしラーメン           |     14 |
+| 2006/12/25 | 五目ラーメン             |     30 |
+..........
+| 2006/12/31 | 野菜餃子                 |     18 |
+| 2006/12/31 | シュウマイ               |      5 |
+| 2006/12/31 | 春巻き                   |      5 |
+| 2006/12/31 | オレンジジュース         |      1 |
+| 2006/12/31 | ウーロン茶               |      2 |
+| 2006/12/31 | サイダー                 |      2 |
++------------+--------------------------+--------+
+
+# mysql> delete from sales where sales.date='2006/12/31'
+ and sales.food='サイダー' and sales.amount='2';
+# mysql> update sales set sales.amount='3' 
+ where sales.data='2006/12/31'
+ and sales.food='オレンジジュース' and sales.amount='1';
+# mysql> select * from sales;
++------------+--------------------------+--------+
+| data       | food                     | amount |
++------------+--------------------------+--------+
+| 2006/12/25 | 味噌ラーメン             |     21 |
+| 2006/12/25 | ラーメン                 |     36 |
+| 2006/12/25 | タンメン                 |     17 |
+| 2006/12/25 | もやしラーメン           |     14 |
+| 2006/12/25 | 五目ラーメン             |     30 |
+..........
+| 2006/12/31 | 野菜餃子                 |     18 |
+| 2006/12/31 | シュウマイ               |      5 |
+| 2006/12/31 | 春巻き                   |      5 |
+| 2006/12/31 | オレンジジュース         |      3 |
+| 2006/12/31 | ウーロン茶               |      2 |
++------------+--------------------------+--------+
+\end{verbatim}
+\end{screen}
+\end{center}
+
+
+\end{itemize}
+
+\item データの抽出
+
+\begin{itemize}
+
+\item テーブルsalesから2016/12/26に売り上げた食品の品目を個数を表示する（日付の表示はしない）．
+
+\begin{center}
+\begin{screen}
+\begin{verbatim}
+# mysql> select sales.food, sales.amount from sales 
+ where sales.data='2006/12/26';
++--------------------------+--------+
+| food                     | amount |
++--------------------------+--------+
+| 味噌ラーメン             |     32 |
+| ラーメン                 |     45 |
+| タンメン                 |     11 |
+| もやしラーメン           |      5 |
+| 五目ラーメン             |     12 |
+| とんこつラーメン         |     24 |
+| チャーシューメン         |     28 |
+| 味噌チャーシュー         |      8 |
+| ねぎラーメン             |     32 |
+| 味噌ねぎラーメン         |     10 |
+| チャーハン               |     14 |
+| 五目チャーハン           |      5 |
+| 海老チャーハン           |      3 |
+| 中華飯                   |      8 |
+| 餃子                     |     72 |
+| 野菜餃子                 |     11 |
+| シュウマイ               |      8 |
+| 春巻き                   |      3 |
+| オレンジジュース         |      1 |
+| ウーロン茶               |     14 |
+| サイダー                 |      2 |
++--------------------------+--------+
+\end{verbatim}
+\end{screen}
+\end{center}
+
+\item テーブルsalesの食品名の横に，テーブルfoodgroupの分類名を参照すて，日付，食品名，分類，個数を表示する．
+
+\begin{center}
+\begin{screen}
+\begin{verbatim}
+# mysql> select sales.data, foodgroup.food, foodgroup.foodgroup, 
+ sales.amount from sales, foodgroup
+ where sales.food=foodgroup.food;
++------------+--------------------------+--------------+--------+
+| data       | food                     | foodgroup    | amount |
++------------+--------------------------+--------------+--------+
+| 2006/12/25 | 味噌ラーメン             | 麺           |     21 |
+| 2006/12/25 | ラーメン                 | 麺           |     36 |
+| 2006/12/25 | タンメン                 | 麺           |     17 |
+| 2006/12/25 | もやしラーメン           | 麺           |     14 |
+| 2006/12/25 | 五目ラーメン             | 麺           |     30 |
+..........
+| 2006/12/31 | 餃子                     | 飲茶         |     21 |
+| 2006/12/31 | 野菜餃子                 | 飲茶         |     18 |
+| 2006/12/31 | シュウマイ               | 飲茶         |      5 |
+| 2006/12/31 | 春巻き                   | 飲茶         |      5 |
+| 2006/12/31 | オレンジジュース         | ドリンク     |      3 |
+| 2006/12/31 | ウーロン茶               | ドリンク     |      2 |
++------------+--------------------------+--------------+--------+
+\end{verbatim}
+\end{screen}
+\end{center}
+
+\item テーブルsalesから，12/30に売り上げたもののうち，麺でかつ単価が750円以上のものについて，売り上げ日，食品名，個数を表示する．
+
+\begin{center}
+\begin{screen}
+\begin{verbatim}
+# mysql> select sales.data, sales.food, sales.amount from sales, 
+ price, foodgroup where sales.food=foodgroup.food
+ and sales.food=price.food and price.fee>=750 
+ and foodgroup.foodgroup='麺';
++------------+--------------------------+--------+
+| data       | food                     | amount |
++------------+--------------------------+--------+
+| 2006/12/30 | 味噌ラーメン             |     31 |
+| 2006/12/30 | 五目ラーメン             |     19 |
+| 2006/12/30 | チャーシューメン         |     17 |
+| 2006/12/30 | 味噌チャーシュー         |     21 |
+| 2006/12/30 | 味噌ねぎラーメン         |     18 |
++------------+--------------------------+--------+
+\end{verbatim}
+\end{screen}
+\end{center}
+
+\end{itemize}
+
+\end{itemize}
+
+
+\subsection{Web システムの導入と公開}
+以下の手順で，動的コンテンツとしてCGI，SSI，PHPコンテンツをWebサーバで公開し，Webブラウザで表示できるようにする．
+
+\subsubsection{動的コンテンツの公開と表示}
+\begin{enumerate}
+\item 以下を実行し，LANG変数をCに変更する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+# export LANG=C
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\end{enumerate}
+
+\subsubsection{CGIの設定}
+\begin{enumerate}
+\item 以下を実行し，Apacheのcgiモジュールを追加する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+# a2enmod cgi
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item /etc/apache2/mods-enabled/mime.confをviエディタで開き，以下の行のコメントを外して有効化する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+AddHandler cgi-script .cgi
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item /etc/apache2/sites-enabled/000-default.confをviエディタで開き，以下を追加する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+<Directory /var/www/html/cgi>
+        Options +ExecCGI
+</Directory>
+\end{verbatim}
+\end{center}
+\end{screen}
+ここでは，/var/www/html/cgiディレクトリ内のコンテンツのCGI動作を許可する．
+
+\item 以下を実行し，Apacheを再起動する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+# systemctl restart apache2
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\end{enumerate}
+
+\subsubsection{SSIの設定}
+
+\begin{enumerate}
+\item 以下を実行し，Apacheのincludeモジュールを追加する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+# a2enmod include
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item /etc/apache2/mods-enabled/mime.confをviエディタで開き，以下の２行が有効があることを確認する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+AddType text/html .shtml
+AddOutputFilter INCLUDES .shtml
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item /etc/apache2/sites-enabled/000-default.confをviエディタで開き，以下を追加する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+<Directory /var/www/html/ssi>
+        Options Includes
+</Directory>
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item 以下を実行し，Apacheを再起動する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+# systemctl restart apache2
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\end{enumerate}
+
+\subsubsection{PHPの設定}
+\begin{enumerate}
+\item 以下を実行し，PHPをインストールする．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+# apt install php
+# apt install libapache2-mod-php
+\end{verbatim}
+\end{center}
+\end{screen}
+\end{enumerate}
+
+\subsubsection{動的コンテンツの取得と公開}
+\begin{enumerate}
+
+\item 以下を実行し，メインサーバにftpコマンドで接続する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+ftp 192.168.0.1
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item 以下を実行し，/pub/wwwディレクトリ内の４つのファイルを取得する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+ftp> cd /pub/www
+ftp> get time.cgi
+ftp> get time.shtml
+ftp> get time.php
+ftp> get counter.cgi
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item 以下を実行し，ftp接続を終了する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+ftp> bye
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item 以下を実行し，公開用ディレクトリ内に，メインサーバから取得したファイルを置くためのディレクトリを作成する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+# mkdir /var/www/html/cgi
+# mkdir /var/www/html/ssi
+# mkdir /var/www/html/php
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item 以下を実行し，作成したディレクトリに，メインサーバから取得したファイルを移動させる．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+# mv time.cgi counter.cgi /var/www/html/cgi
+# mv time.shtml /var/www/html/ssi
+# mv time.php /var/www/html/php
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item 以下を実行し，/var/www/html/cgiディレクトリにcount.datを作成する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+# touch /var/www/html/cgi/count.dat
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item /var/www/html/cgi/count.datをviエディタで開き，「0」と書いて保存する．
+
+\item 以下を実行し，各コンテンツの権限を変更する（ここでは，利用者全員のすべての権限を許可する）．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+# cd /var/www/html/cgi
+# chmod 777 *
+# cd ../ssi
+# chmod 777 *
+# cd ../php
+# chmod 777 *
+# cd /home/exp
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item Webブラウザで以下のURLを開き，すべてのページで現在の時刻が表示されることを確認する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+http://www.g9.info.kochi-tech.ac.jp/cgi/time.cgi
+http://www.g9.info.kochi-tech.ac.jp/ssi/time.shtml
+http://www.g9.info.kochi-tech.ac.jp/php/time.php
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item Webブラウザで以下のURLを開き，アクセスするたびにカウントが１増えるか確認する．また，２つ以上のクライアントが同時にアクセスしたときの動作が正常であることも確認する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+http://www.g9.info.kochi-tech.ac.jp/cgi/counter.cgi
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\end{enumerate}
+
+\subsubsection{Media Wikiのインストール}
+\begin{enumerate}
+\item 以下を実行し，メインサーバにftpコマンドで接続する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+ftp 192.168.0.1
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item 以下を実行し，/pub/sourcesディレクトリ内のMedia Wikiのアーカイブを取得する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+ftp> cd /pub/sources
+ftp> get mediawiki-1.28.2.tar.gz
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item 以下を実行し，ftp接続を終了する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+ftp> bye
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item サーバコンピュータの時刻が正常ではないとアーカイブを展開できないことがあるので，以下を実行して現在の時刻に合わせる．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+# date -s "（月）/（日） （時）:（分） （年）"
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item 以下を実行し，取得したMedia Wikiのアーカイブを展開する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+# tar -xvzf mediawiki-1.28.2.tar.gz
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item 以下を実行し，展開したディレクトリの名前をmediawikiに変更する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+# mv mediawiki-1.28.2.tar.gz mediawiki
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item 以下を実行し，mediawikiディレクトリを公開用ディレクトリ/var/www/htmlに移動させる．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+# mv mediawiki /var/www/html
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item 以下を実行し，mediawikiディレクトリとその中のファイルの所有者を，Apacheの実行ユーザであるwww-dataに変更する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+# cd /var/www/html
+# chown -R www-data:www-data mediawiki
+# cd /home/exp
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item 以下を実行し，mediawikiに必要なパッケージをインストール．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+# apt install php-xml
+# apt install php-mbstring
+# apt install php-mysql
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item Webブラウザで以下のURLのページに接続する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+http://www.g9.info.kochi-tech.ac.jp/mediawiki
+\end{verbatim}
+\end{center}
+\end{screen}
+
+% Webブラウザからmediawikiのインストール設定を行う．
+% ...
+% LocalSettings.phpをダウンロードする．
+
+\subsubsection{Media Wikiの設定}
+Media Wiki のインストール後，クライアントPC(ここでは Windows10)での設定を行う．\\
+
+\begin{enumerate}
+\item ブラウザから，「http://www.g9.kochi-tech.ac.jp/mediawiki」を検索し，設定画面に入る．
+
+\item 以下の内容を設定する．
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+        あなたの言語        　：ja-日本語
+        ウィキの言語        　：ja-日本語
+
+        データベースのホスト　　：localhost
+        データベース名　　　　　：my_wiki
+        接頭辞　　　　　　　　　：wikidb
+        データベースのユーザ名　：root
+        データベースのパスワード：root00
+\end{verbatim}
+    \end{screen}
+  \end{center}
+  
+\item データベースの設定
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+        ストレートエンジン　　　：InnDB
+        データベースの文字セット：UTF-8
+\end{verbatim}
+    \end{screen}
+  \end{center}
+
+
+\item 管理者アカウントの設定
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+        ウィキ名        ：group9
+        利用者名        ：root
+        パスワード　　　　：rootgroup9
+        メールアドレス　　：(適当なもの)
+\end{verbatim}
+    \end{screen}
+  \end{center}
+
+\item CentOSにおいて，LocalSettings.phpをホームディレクトリに置いた状態でターミナル開き，以下を実行することで，LocalSettings.phpをサーバコンピュータの/home/expに送信する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+$ scp LocalSettings.php exp@172.21.19.2:
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item サーバコンピュータにおいて，以下を実行し，LocalSettings.phpを/var/www/html/mediawikiディレクトリに移動させる．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+# mv LocalSettings.php /var/www/html/mediawiki
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\end{enumerate}
+
+\subsubsection{Media Wikiの動作確認}
+Webブラウザで以下のURLのページに接続し，Media Wikiが表示されるか確認する．また，そのページを編集し，その変更点が他のコンピュータのWebブラウザから表示しても反映されているかも確認する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+http://www.g9.info.kochi-tech.ac.jp/mediawiki
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\subsubsection{WordPressのインストール}
+\begin{enumerate}
+\item 以下を実行し，メインサーバにftpコマンドで接続する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+ftp 192.168.0.1
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item 以下を実行し，/pub/sourcesディレクトリ内のWordPressのアーカイブを取得する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+ftp> cd /pub/sources
+ftp> get wordpress-4.7.4-ja.tar.gz
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item 以下を実行し，ftp接続を終了する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+ftp> bye
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item サーバコンピュータの時刻が現在のものであることを確認する．
+
+\item 以下を実行し，取得したWordPressのアーカイブを展開する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+# tar -xvzf wordpress-4.7.4-ja.tar.gz
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item 以下を実行し，展開したディレクトリの名前をwordpressに変更する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+# mv wordpress-4.7.4-ja.tar.gz wordpress
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item 以下を実行し，wordpressディレクトリを公開用ディレクトリ/var/www/htmlに移動させる．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+# mv wordpress /var/www/html
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item 以下を実行し，wordpressディレクトリとその中のファイルの所有者を，Apacheの実行ユーザであるwww-dataに変更する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+# cd /var/www/html
+# chown -R www-data:www-data wordpress
+# cd /home/exp
+\end{verbatim}
+\end{center}
+\end{screen}
+
+% MySQLでのデータベースの作成
+\item 以下を実行し，mysqlコマンドによるデータベースへの接続を行う．その後，パスワードをを聞かれるので，root00を入力する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+# mysql -u root -p
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item 以下を実行し，データベースwordpressを作成する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+mysql> create database wardpress;
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item 以下を実行し，データベースへの接続を終了する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+mysql> exit
+\end{verbatim}
+\end{center}
+\end{screen}
+
+% Webブラウザによる設定
+\item Webブラウザで以下のURLのページに接続する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+http://www.g9.info.kochi-tech.ac.jp/wordpress
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item WordPressの構成ファイルのセットアップ画面が表示されるので，「さあ、始めましょう！」をクリックする．
+
+\item データベース接続のための詳細を以下のように入力し，「送信」をクリックする．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+データベース名：wordpress
+ユーザー名：root
+パスワード：root00
+データベースのホスト名：localhost
+テーブル接頭辞：wp_
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item 「インストール実行」をクリックする．
+
+\item 必要情報を以下のようにして「WordPress をインストール」をクリックする．その後，成功したというページが表示される．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+サイトのタイトル：group9
+ユーザー名：root
+パスワード：root00
+パスワード確認：「脆弱なパスワードの仕様を確認」にチェックを入れる．
+メールアドレス：dummy@dummy.com（ダミーアドレス）
+検索エンジンでの表示：「検索エンジンがサイトをインデックスしないようにする」にチェックを入れる．
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\end{enumerate}
+
+\subsubsection{WordPressの動作確認}
+Webブラウザで以下のURLのページに接続し，WordPressが表示されるか確認する．そこから登録したアカウントでログインし，記事を投稿する．その後，WordPressのページを他のコンピュータのWebブラウザから閲覧者として表示したとき，投稿した記事が見られるかを確認する．また，閲覧者がその記事にコメントし，編集者がそのコメントを許可することで，コメントの機能が利用できるか確認する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+http://www.g9.info.kochi-tech.ac.jp/WordPress
+\end{verbatim}
+\end{center}
+\end{screen}
+
+
+%
+\section{考察}
+ユーザが得たい情報や楽しみたい内容も多様化するに伴い，Web コンテンツや Web サービスも多様化し，様々な Web システムの運用と膨大な量のデータが利用・管理されている．その膨大な情報やデータを管理するシステムとして，Web システムにおいてデータベースが利用されている．また，動的コンテンツの実装においてデータベースと連携して行う必要があるため，データベース管理はこの際に重要なこととなっている．\\
+　そんな中で，RDB を用いたデータベースシステムの設定を行う言語である SQL にはセキュリティ面において問題がある．それは，「SQL インジェクション」である．SQL インジェクションとは，SQL 文の一部を「'」で囲むとその囲まれた部分は文字列として認識されることが悪用され，SQL を利用する箇所に不正のある SQL 文を挿入する攻撃である．これにより，不正にデータが読み取られたり，データの改ざんまたは削除されたりするなど様々な被害を被る可能性がある．\\
+　これを防ぐために，入力された値をそのまま使用して SQL 文を組み立てることが問題の原因となっているため，準備されたファームからデータを取得して SQL 文を組み立てるプリペアドステートメントという仕組みを使用して SQL 文を組み立てるようにする必要があると考える．プリペアドステートメントは，実行したい SQL をコンパイルした一種のテンプレートのようなものであり，テンプレート中に変数の場所を示す箇所を置いておき，プログラム実行時に実際の値をセットします．これを用いることで，想定外の SQL 文が組み立てられる現象を回避できるため, SQL インジェクションの対策の1つとしての役割を果たすことができると考える．
+
+
+\begin{thebibliography}{9}
+\bibitem{bib:cookietext}
+    NTTデータ最先端技術・NTTデータ 著，
+    ``Web アプリケーションサーバー 設計・構築ノウハウ,''
+    日経BP社，2008
+\bibitem{bib:iptext}
+    竹下隆史・村山公保・荒井透・苅田幸雄 著，
+    ``マスタリング TCP/IP 入門編 第5版,''
+    株式会社 オーム社，2004．
+\bibitem{bib:sqltext}
+    Alan Beaulieu(アラン・ブールー) 著，
+    ``初めてのSQL,''
+    株式会社オーラリー・ジャパン，2006
+\bibitem{bib:rdbtext}
+    増永 良文 著，
+    ``リレーショナルデータベース入門[新訂版]- データベースモデル・SQL・管理システム −,''
+    株式会社 サイエンス社，2010
+\bibitem{bib:sql2text}
+    株式会社メトロシステムズ 著，
+    ``プロとしてのSQLリファレンス,''
+    株式会社シナノ，2009
+\end{thebibliography}
+
+\end{document}
