@@ -1,0 +1,236 @@
+% -- 第7章作業記録(Ubuntu) --
+\documentclass[a4j,titlepage]{jarticle}
+\usepackage[dvipdfmx]{graphicx}
+\usepackage{url}
+\usepackage{epsfig}
+\usepackage{ascmac}
+%\usepackage{here}
+
+\begin{document}
+
+% 0724
+\subsection{ファイル共有サーバの設定}
+サーバ上で Samba サーバを構築し，UNIX(Linux), Windows, Mac クライアントPC とファイル共有を行えるように設定を行う．
+
+\subsubsection{Samba の導入}
+ファイル共有システムのサーバである samba のインストール・設定を行う．
+
+\begin{enumerate}
+\item プロキシの設定を行う．
+
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+  export http_proxy=http://192.168.0.1:7999
+  export https_proxy=http://192.168.0.1:7999
+\end{verbatim}
+    \end{screen}
+    \end{center}
+ 
+    \item DNS を利用するため，bind9 を起動する．
+
+\item samba をインストールする．
+
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+  # apt install samba
+\end{verbatim}
+    \end{screen}
+    \end{center}
+  
+    \item 共有フォルダの作成する．
+
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+  # mkdir /home/share
+\end{verbatim}
+    \end{screen}
+    \end{center}
+
+    \item smb.conf ファイルの末尾にセクションを追加する．
+
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+  # vi /etc/samba/smb.conf
+
+  [share]
+        comment = share
+        browseable = yes
+        path = /home/share
+        guest ok = no
+        read only = no
+        invalid users = root
+\end{verbatim}
+    \end{screen}
+    \end{center}
+
+    \item Samba の smbd の再起動する．
+      
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+  # systemctl restart smbd
+\end{verbatim}
+    \end{screen}
+    \end{center}
+
+    \item Samba ユーザアカウントの追加とパスワードを設定(パスワードはroot00)する．
+
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+  # mkdir smbpasswd -a exp
+\end{verbatim}
+    \end{screen}
+    \end{center}
+
+    \item クライアントPC に実行権限を与える．
+
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+  # chmod 775 /home/share
+\end{verbatim}
+    \end{screen}
+    \end{center}
+
+\end{enumerate}
+
+    \subsubsection{NFS の導入}
+    ここでは，UNIX(Linux)のサーバとクライアント間でのファイル共有システムとして NFS の環境構築を行う．
+
+\begin{enumerate}
+\item NFS のインストールする．
+
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+  # apt -y install nfs-kernel-server 
+\end{verbatim}
+    \end{screen}
+    \end{center}
+
+\item ディレクトリの公開する．
+
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+  # mkdir -p /opt/nfs
+  # echo '/opt/nfs 172.21.19.0/24(rw,sync,no_subtree_check,no_root_squash)'>>/etc/exports
+  # export -ra
+\end{verbatim}
+    \end{screen}
+  \end{center}
+
+\item nfs-kernel-server を再起動させる．
+
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+  # system]ctl enable nfs-kernel-sever.service
+  # systemctl start nfs-kernel-server.service
+\end{verbatim}
+    \end{screen}
+    \end{center}
+
+\end{itemize}
+
+
+\newpage
+\subsection{バックアップ}
+ここでは，グループユーザのデータや設定を行ってきた多数のファイルについてのバックアップを取得する．動作しているファイルシステムに対し，サービスはなるべく停止させた状態で，tar コマンドにてバックアップを行う．対象となるディレクトリ名は，/bin, /etc, /home, /lib, /lib64, /root, /sbin, /usr, /var とする．このとき，/etc/fstab ディレクトリはバックアップ対象として指定しないように除く．これらの手順に沿って行う．実際の入力は以下のようになる．
+
+\begin{center}
+  \begin{screen}
+\begin{verbatim}
+  # mkdir bkup
+  # tar cpzf /bkup/
+  # cd bkup
+  # tar tvzf etc.tar.gz | grep fstab
+  # scp * 172.21.19.3: (バックアップデータを CentOS に送信)  
+\end{verbatim}
+  \end{screen}
+\end{center}
+
+
+\subsection{ストレージの交換とレストア}
+サーバ上のシステムに内蔵されている HDD を SSD に交換し，OS を再インストールし，tar でバックアップしたファイルを scp コマンドでサーバに戻し，tar コマンドで展開し再起動して動作確認を行う．
+
+\begin{enumerate}
+\item サーバを停止して，ハードディスクを交換する．
+  
+\item サーバ本体の側面のネジを開けて本体の中にある HDD ディスクを取り出し，SSD を取り付ける．
+
+\item Ubuntu の DVD ディスクを再インストールする．
+  
+\item OS インストール時と同じパラメータを用いる．
+
+\item バックアップ設定を参考に設定情報を元に戻す．
+
+\item scp コマンドで CentOS から Ubuntu サーバに戻し，tar コマンドでバックアップしたデータを展開する．
+
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+  # scp * 172.21.19.2:
+
+  # tar cvf home.tar 
+  # tar cvf bin.tar
+  # tar cvf lib.tar
+  # tar cvf lib64.tar
+  # tar cvf root.tar 
+  # tar cvf sbin.tar
+  # tar cvf usr.tar
+  # tar cvf var.tar
+\end{verbatim}
+    \end{screen}
+    \end{center}
+
+    \item これらの設定を行った上でサーバを再起動させる．
+
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+  # reboot 
+\end{verbatim}
+    \end{screen}
+    \end{center}
+
+\item これらより，WordPress や html の閲覧ができるか確認し，閲覧できたら終了となる．
+      
+\end{enumerate}
+
+
+\subsection{サーバ・クライアント PC の初期化}
+\begin{enumerate}
+
+\item KNOPPIX 7.0 OS をインストールする．
+
+\item ターミナル上で以下のコマンドを入力して中身を確認し，中身があるものを初期化する
+
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+  # sfdidsk -l
+  # shred /dev/sda
+\end{verbatim}
+    \end{screen}
+    \end{center}
+
+    \item シャットダウンし，DVD ディスクを抜く．
+
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+  # /sbin/poweroff 
+\end{verbatim}
+    \end{screen}
+    \end{center}
+
+\end{enumerate}
+  
+
+\end{document}
