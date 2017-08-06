@@ -1,0 +1,549 @@
+\documentclass[a4j,titlepage]{jarticle}
+\usepackage[dvipdfmx]{graphicx}
+\usepackage{url}
+\usepackage{epsfig}
+\usepackage{ascmac}
+\usepackage{here}
+%
+\title{情報学群実験第4C 第7章レポート\\　ストレージ・サーバ運用管理}
+\author{学籍番号 1190358\\
+        畠山 友華\\
+        グループ9}
+\date{\today}
+%% プリアンブルここまで
+
+%% 本文
+\begin{document}
+\maketitle
+\section{目的}
+% 背景からの実験の目的を記述
+% --- 背景 ---
+インターネットの普及に伴い電話やメールのような通常の通信だけでなく，様々な Web サービスやコンテンツ配信が行われ，目的に合った情報を閲覧することが容易になっている．これらの Web サービスやコンテンツの配信を行うためには膨大なデータを扱う．
+
+% --- 目的 ---
+それらのデータ活用していくためには各サーバの構築と適切なデータの運用・管理を行う必要がある．そういったサーバの運用・管理の方法としてバックアップとレストアがある．これらはウィルスや不正アクセス・誤ったコマンド入力によるファイルやデータの消去などといった不測の事態への対処のために必要なものとなるものである．また，提供するサーバが複数ある場合にはサーバ上でバックアップを取りたいファイルやディレクトリを別ファイルやディレクトリにコピーし，そのコピーしたデータをネットワークを介してストレージへのアクセスを行うことが有効とされる事がある．適切にバックアップを行い，ストレージを交換した際にでもレストアを行えるようにすることを目的とする．また，この長期間サーバの運用などでストレージの交換や廃棄を行う場合に，Web サービスやコンテンツ配信など重要な情報や個人情報などのデータを扱っているものに対しては適切な処置を行う必要があるため注意する．
+
+\section{内容}
+% 2つの実験の行う内容
+サーバから UNIX 系 OS と Windows 間においてもファイルやデータが共有できるように，ファイル共有システムのインストールと設定を行い，アクセス権限を与えることによりクライアント PC でもファイルを読み込み・書き込みができる確認する．このとき，サーバ上でファイル共有専用のディレクトリを作成し，設定したクライアント PC から接続して行う．\\ 
+　DNS, Web, データベースなどのサーバを構築して利用していくために適切な運用・管理して進めていく必要となってくる．その際の重要な要素としてのバックアップとレストアを行う．サーバコンピュータにおいてバックアップファイルを作成後，圧縮した必要なバックアップデータをクライアント PC に転送する．次に，コンピュータの内部ストレージを交換し，初期化を行う．この際に，バックアップして転送したデータをサーバに戻し，それを展開・保存し元の状態に戻すレストアの作業を行う．\\
+　最後に，コンピュータの初期化を行うための OS をインストールすることで，全ての端末の初期化を行う．初期化を終えると，ハードウェアに接続しているケーブル等を抜き，解体する．
+
+
+\newpage
+\section{要素技術}
+サーバを運用及び管理していくための技術として「NAS」，「SAN」，「RAID」，「バックアップ」がある．ここでは，これらの技術について解説・説明していく．
+
+
+\subsection{NAS}
+NAS(Network Attached Storage) とは，ネットワークに直接接続し，コンピュータなどからネットワークを通じてアクセスできる外部記憶装置のことをいう．外部記憶装置としてよく使用される USB ハードディスクとは異なり，1つの NAS の中に複数ハードディスクが搭載されているため大容量の記憶装置となっている．NAS は，データを共有しやすいため，社内でファイルを共有する場合に外部記憶装置の特性を活かし，特定のコンピュータの電源がオフになっていても参照できるというメリットがある．\\
+　また，データの共有範囲を細かく設定することができる．ユーザもしくはグループごとにアクセス権限を設定でき，どこまでの範囲に開示できるかを NAS 側で設定することができる\cite{bib:nastext}．\\
+　ネットワークを介してのファイル共有環境は，複数のファイルサーバや NAS デバイスで構成される．コストやパフォーマンスなどの理由により，特定デバイスファイルを別のデバイスに移動する必要がある．そのような場合に，ファイル共有環境でファイルレベルの仮想化を実装することができれば，ダウンタイムなしのシンプルなファイルの移動が可能となる．これにより，ファイルがアクセス中であっても，NAS デバイス間でのファイル移動が可能となる\cite{bib:santext}．NAS には次のような利点が挙げられる．
+
+\begin{itemize}
+\item 情報の包括的なアクセス
+
+\item 効率性の向上
+  
+\item 柔軟性の向上
+
+\item 高可用性
+
+\item セキュリティサポート
+
+\item 低コスト
+
+\item 導入が容易
+
+\end{itemize}
+
+
+\subsection{SAN}
+SAN(Storage Area Network)は，サーバと複数のハードディスクなどのストレージを高速のネットワークで接続したシステムのことをいう．メリットとしてストレージを集中管理できることから，主に企業などで大容量のデータ保存などに利用される．ファイバ・チャネルを利用し，サーバとスイッチ・ストレージ装置を接続する形態を取ることが多い．ファイバ・チャネルを用いる SAN を FC-SAN, Ethernet を用いる SAN を IP-SAN と呼ぶこともある．\\
+　SAN は，FC ネットワークを通じてサーバとストレージデバイスとの間でデータのやり取りを行う．この SAN により，ストレージの統合が可能になり，ストレージを複数のサーバ間で共有することが可能となる．これにより，ストレージリソースの利用率が良くなり組織が購入あるいは管理しなければならないストレージが少なくなる．また，統合によりストレージの管理が一元化されることでより単純になるため，情報を管理するための濾すとがさらに削減される．SAN により，分散しているサーバとストレージの接続も可能にすることができる\cite{bib:iptext}\cite{bib:santext}．\\
+
+\subsection{RAID}
+ハードディスク容量が増大し，記録しておくデータ量が増えるに従ってハードディスクの故障などへの備えが必要になってくる．このような対策として考案されたものが RAID(Redundant array of inexpensive disk)である．これは，２台以上のハードディスクを連結して１代の論理ディスクとして利用する方法である．また，ディスクを荒れ意識に繋ぐため，「ディスクアレイ」をも呼ばれる．この機能をもつ RAID には RAID0$~$RAID5 とそれぞれの役割がある．
+
+\begin{description}
+
+\item[(1)RAID0]\mbox{}\\
+　RAID0 は単にストライピングとも呼ばれる．データを分散して複数のハードディスクに記録する(図\ref{fig:raid0})．単体のハードディスクに記録されたデータはハードディスクのそれぞれのブロックから順番に読み出されるが，RAID0 の方式でデータ方式でデータを格納している場合，各ハードディスクから同時にデータの読み出しが行われる．このために，大容量のアプリケーションなどを格納しておく場合にはデータの読み出しが行われる．ただし，ハードディスクに障害が起こった場合のデータ復旧機能はない．
+
+  \begin{figure}[htbp]
+    \begin{center}
+      \resizebox{110mm}{!}{\includegraphics{raid0.png}}
+      \caption{RAID0 の仕組み}
+     \label{fig:raid0}
+   \end{center}
+  \end{figure}
+
+
+\item[(2)RAID1]\mbox{}\\
+　RAID1 は「ミラーリング」と呼ばれるものである．ハードディスクを２つのグループに分けて同じデータを記録しておき，データの読み出しはどちらか一方のハードディスクから行う(図\ref{fig:raid1})．この方式においては，どちらか一方のハードディスクが故障しても，もう一方からデータを読みだせばいいため，ただし実質的に使えるハードディスク容量は半分になってしまうという問題点がある．
+
+  \begin{figure}[htbp]
+    \begin{center}
+      \resizebox{110mm}{!}{\includegraphics{raid1.png}}
+      \caption{RAID1 の仕組み}
+     \label{fig:raid1}
+   \end{center}
+  \end{figure}
+
+
+\item[(3)RAID2]\mbox{}\\
+　RAID2 はエラー検出・訂正のためのコードを生成し，複数のハードディスクに記録する事ができる．ハードディスクの故障の際にはエラー訂正をしながらデータ再生を行う仕組みとなっている．しかし現在では，ほとんどのハードディスクがエラー検出・訂正の機能を搭載しているため，RAID2 を採用している製品は少ない．
+  
+\item[(4)RAID3]\mbox{}\\
+　RAID3 はパリティを用いてエラー検出・訂正を行う．データをストライピングして記録するためのハードディスク複数台と，パリティ用のハードディスク1台で構成されている．RAID3 は小容量のデータの場合，かえってアクセスに時間がかかってしまうため，主にスーパーコンピュータでの利用が考えられている．
+  
+\item[(5)RAID4]\mbox{}\\
+　RAID4 はデータ週馥にパリティを使う点では RAID3 と同じであるが，データのストライピングをビット単位ではなく何セクタといったブロック単位で行うという点で異なっている．RAID3 では常に全てのハードディスクにアクセスするが，RAID4 は特定のハードディスクだけにアクセスすることができる．
+  
+\item[(6)RAID5]\mbox{}\\
+　RAID5 はパリティを1代のハードディスクに任すことはせず，分散して全てのハードディスクに記録することができる．このとき，ストライピングはブロック単位で行う\cite{bib:raidtext}．
+  
+\end{description}
+
+\newpage
+\subsection{バックアップ}
+思いもよらないことでもいつかは起こってしまう．このことのように，疑問の余地はない．ハードディスクが磨耗する，テープが伸びて壊れる，うっかり間違ったスイッチをコマンドに渡してしまったり，あるいは誤ったディレクトリやマシンで操作したためにデータが虚空の空間へと消失してしまうこともある．また，ウィルスが侵入するということもある．これらのことがいつ起きてもいいようにバックアップというものがある\cite{bib:servertext}．\\
+　バックアップをとっていなければ，データ復旧には多大な労力と時間を費やしてしまったり，復旧不可能なデータもあったりと以前あった状態には戻し難い．そのため，バックアップを取ることによって，データを適切に復旧することが可能になり以前と何ら変わりのないデータの取り扱いを行う事ができる．したがって，システム管理者や自分の保持しているコンピュータにおいて定期的にバックアップを取る必要がある． \\
+　また，バックアップを取るための方式として，以下の種類のものが挙げられる．
+
+\begin{itemize}
+\item 完全バックアップ\\
+  図\ref{fig:full}のように，毎回指定したファイルの完全データを収集するバックアップ手法である．完全バックアップ1セットを利用すれば，細かな差分は意識せずに済むためわかりやすく，復旧時間も短時間で済むという利点がある．ただし，全てのデータを取得するため，取得時間は一番長くなる．他のバックアップの起点となるものである．
+
+  \begin{figure}[htbp]
+    \begin{center}
+      \resizebox{110mm}{!}{\includegraphics{full.png}}
+      \caption{完全バックアップ}
+     \label{fig:full}
+   \end{center}
+  \end{figure}
+
+\newpage
+\item 差分バックアップ\\
+　完全バックアップ取得以降に変更された全てのデータをバックアップ対照とする手法である．直前までの完全バックアップから累積的に実行されるため，完全バックアップ以降の変更のあったデータはすべて差分バックアップの対象となる．\\
+  　図\ref{fig:sabun}のように，例えば火曜日のバックアップ取得は「月曜日差分＋火曜日差分」，水曜日のバックアップは，「月曜日差分＋火曜日差分＋水曜日差分」といったように積み上げ式にデータが増えてく方式である．
+
+  \begin{figure}[htbp]
+    \begin{center}
+      \resizebox{110mm}{!}{\includegraphics{sabun.png}}
+      \caption{差分バックアップ}
+     \label{fig:sabun}
+   \end{center}
+  \end{figure}
+
+
+\item 増分バックアップ\\
+　前回のバックアップ以降の増分をバックアップする方式である．例えば，以下の図\ref{fig:zoubun}のように，火曜日のバックアップは「月曜日増分からの増分データ」，水曜日のバックアップは「火曜日のバックアップからの増分データ」というように直前までの増分バックアップ以降に変更されたデータを対照にバックアップを取得する．重複するデータが少ない分，差分バックアップよりも時間や容量が少なく済むが，完全バックアップ以降の増分バックアップ全てを用意しなければ，リストアができないという特徴がある\cite{bib:backtext}．
+
+  \begin{figure}[htbp]
+    \begin{center}
+      \resizebox{110mm}{!}{\includegraphics{zoubun.png}}
+      \caption{増分バックアップ}
+     \label{fig:zoubun}
+   \end{center}
+  \end{figure}
+  
+\end{itemize}
+
+定期的にデータベース全体のバックアップを新しい媒体に作成し，毎回変更の合ったデータの差分またはバックアップを別の媒体に作成することが適切となってくる．
+
+\section{作業記録}
+ここでは，まず，コンピュータ間でのファイル共有システムの実現を行い，バックアップを行った後に HDD から SSD へのストレージ交換を行いレストアを行う．そして，各コンピュータ OS の初期化と使用したケーブル等の廃棄を行う．それらの手順を書く項目に対して説明していく．
+
+\subsection{ファイル共有サーバの設定}
+サーバ上で Samba サーバを構築し，UNIX(Linux), Windows, Mac クライアントPC とファイル共有を行えるように設定を行う．
+
+\subsubsection{Samba の導入}
+ファイル共有システムのサーバである samba のインストール・設定を行う．
+
+\begin{enumerate}
+\item プロキシの設定を行う．
+
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+  export http_proxy=http://192.168.0.1:7999
+  export https_proxy=http://192.168.0.1:7999
+\end{verbatim}
+    \end{screen}
+    \end{center}
+ 
+    \item DNS を利用するため，bind9 を起動する．
+
+\item samba をインストールする．
+
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+  # apt install samba
+\end{verbatim}
+    \end{screen}
+    \end{center}
+  
+    \item 共有フォルダの作成する．
+
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+  # mkdir /home/share
+\end{verbatim}
+    \end{screen}
+    \end{center}
+
+    \item smb.conf ファイルの末尾にセクションを追加する．
+
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+  # vi /etc/samba/smb.conf
+
+  [share]
+        comment = share
+        browseable = yes
+        path = /home/share
+        guest ok = no
+        read only = no
+        invalid users = root
+\end{verbatim}
+    \end{screen}
+    \end{center}
+
+    \item Samba の smbd の再起動する．
+      
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+  # systemctl restart smbd
+\end{verbatim}
+    \end{screen}
+    \end{center}
+
+    \item Samba ユーザアカウントの追加とパスワードを設定(パスワードはroot00)する．
+
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+  # mkdir smbpasswd -a exp
+\end{verbatim}
+    \end{screen}
+    \end{center}
+
+    \item クライアントPC に実行権限を与える．
+
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+  # chmod 775 /home/share
+\end{verbatim}
+    \end{screen}
+    \end{center}
+
+\end{enumerate}
+
+    \subsubsection{NFS の導入}
+    ここでは，UNIX(Linux)のサーバとクライアント間でのファイル共有システムとして NFS の環境構築を行う．
+
+\begin{enumerate}
+\item NFS のインストールする．
+
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+  # apt -y install nfs-kernel-server 
+\end{verbatim}
+    \end{screen}
+    \end{center}
+
+\item ディレクトリの公開する．
+
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+  # mkdir -p /opt/nfs
+  # echo '/opt/nfs 172.21.19.0/24(rw,sync,no_subtree_check,no_root_squash)'>>/etc/exports
+  # export -ra
+\end{verbatim}
+    \end{screen}
+  \end{center}
+
+\item nfs-kernel-server を再起動させる．
+
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+  # system]ctl enable nfs-kernel-sever.service
+  # systemctl start nfs-kernel-server.service
+\end{verbatim}
+    \end{screen}
+    \end{center}
+
+\end{itemize}
+
+
+\newpage
+\subsection{バックアップ}
+ここでは，グループユーザのデータや設定を行ってきた多数のファイルについてのバックアップを取得する．動作しているファイルシステムに対し，サービスはなるべく停止させた状態で，tar コマンドにてバックアップを行う．対象となるディレクトリ名は，/bin, /etc, /home, /lib, /lib64, /root, /sbin, /usr, /var とする．このとき，/etc/fstab ディレクトリはバックアップ対象として指定しないように除く．これらの手順に沿って行う．実際の入力は以下のようになる．
+
+\begin{center}
+  \begin{screen}
+\begin{verbatim}
+  # mkdir bkup
+  # tar cpzf /bkup/
+  # cd bkup
+  # tar tvzf etc.tar.gz | grep fstab
+  # scp * 172.21.19.3: (バックアップデータを CentOS に送信)  
+\end{verbatim}
+  \end{screen}
+\end{center}
+
+\subsection{ストレージの交換とレストア}
+サーバ上のシステムに内蔵されている HDD を SSD に交換し，OS を再インストールし，tar でバックアップしたファイルを scp コマンドでサーバに戻し，tar コマンドで展開し再起動して動作確認を行う．
+
+\begin{enumerate}
+\item サーバを停止して，ハードディスクを交換する．
+  
+\item サーバ本体の側面のネジを開けて本体の中にある HDD ディスクを取り出し，SSD を取り付ける．
+
+\item Ubuntu の DVD ディスクを再インストールする．
+  
+\item OS インストール時と同じパラメータを用いる．
+
+\item バックアップ設定を参考に設定情報を元に戻す．
+
+\item scp コマンドで CentOS から Ubuntu サーバに戻し，tar コマンドでバックアップしたデータを展開する．
+
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+  # scp * 172.21.19.2:
+
+  # tar cvf home.tar 
+  # tar cvf bin.tar
+  # tar cvf lib.tar
+  # tar cvf lib64.tar
+  # tar cvf root.tar 
+  # tar cvf sbin.tar
+  # tar cvf usr.tar
+  # tar cvf var.tar
+\end{verbatim}
+    \end{screen}
+    \end{center}
+
+    \item これらの設定を行った上でサーバを再起動させる．
+
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+  # reboot 
+\end{verbatim}
+    \end{screen}
+    \end{center}
+
+\item これらより，WordPress や html の閲覧ができるか確認し，閲覧できたら終了となる．
+      
+\end{enumerate}
+
+\subsection{ルータの初期化}
+ルータを以下の手順で初期化する．
+
+\begin{enumerate}
+
+\item USBシリアルケーブルで，Windows7とルータのコンソールを接続する．
+
+\item Windows7からPuTTYを起動し，シリアル接続の設定をした後，セッションを開始する．
+
+\item セッション画面が表示された後，Enterキーを押す．
+
+\item 以下を実行し，特権モードになる．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+router9> en
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item 以下を実行し，nvram:という場所を確認する．設定情報はこの中のstartup-configに保存されている．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+router9# dir nvram:
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item 以下を実行し，startup-configを消去する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+router9# erase startup-config
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item 以下を実行し，もう一度nvram:を確認する．startup-configが０バイトになっていることを確認する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+router9# dir nvram:
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\end{enumerate}
+
+\subsection{ルータの初期化}
+スイッチを以下の手順で初期化する．
+
+\begin{enumerate}
+
+\item USBシリアルケーブルで，Windows7とスイッチのコンソールを接続する．
+
+\item Windows7からPuTTYを起動し，シリアル接続の設定をした後，セッションを開始する．
+
+\item セッション画面が表示された後，Enterキーを押す．
+
+\item 以下を実行し，特権モードになる．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+Switch> en
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item 以下を実行し，nvram:という場所を確認する．設定情報はこの中のstartup-configに保存されている．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+Switch# dir nvram:
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item 以下を実行し，startup-configを消去する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+Switch# erase startup-config
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item 以下を実行し，もう一度nvram:を確認する．startup-configが０バイトになっていることを確認する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+Switch# dir nvram:
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item 以下を実行し，flash:という場所を確認する．VLAN情報がこの中のvlan.datに保存されている．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+Switch# dir flash:
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item 以下を実行し，vlan.datを消去する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+Switch# delete vlan.dat
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\item 以下を実行し，もう一度flash:を確認する．vlan.datが一覧から消えていることを確認する．
+\begin{screen}
+\begin{center}
+\begin{verbatim}
+Switch# dir flash:
+\end{verbatim}
+\end{center}
+\end{screen}
+
+\end{enumerate}
+
+\subsection{サーバ・クライアント PC の初期化}
+\begin{enumerate}
+
+\item KNOPPIX 7.0 OS をインストールする．
+
+\item ターミナル上で以下のコマンドを入力して中身を確認し，中身があるものを初期化する
+
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+  # sfdidsk -l
+  # shred /dev/sda
+\end{verbatim}
+    \end{screen}
+    \end{center}
+
+    \item シャットダウンし，DVD ディスクを抜く．
+
+  \begin{center}
+    \begin{screen}
+\begin{verbatim}
+  # /sbin/poweroff 
+\end{verbatim}
+    \end{screen}
+    \end{center}
+
+\end{enumerate}
+
+\subsection{ケーブル類とDVDの整頓}
+ルータ，スイッチおよびすべてのコンピュータの初期化が終わった後，接続されたケーブル類をすべて抜く．これらのケーブル類と使用したDVDは元々あった場所に片付ける．
+
+\section{考察}
+サーバ上で管理している膨大なデータを不測の事態から守るために，バックアップとレストアの作業を必要とする．同様に，個人で使用するコンピュータ端末でも定期的に外部ストレージなどにバックアップを行い，ファイル管理を行うことでコンピュータ容量と不測の事態から防ぐことができる．バックアップの問題点として次のようなことがある．
+
+\begin{itemize}
+\item バックアップ作業にかかる時間の問題
+
+\item ストレージ確保の費用
+ 
+\item バックアップ用ストレージの容量
+
+\end{itemize}
+
+　これらを解決する方法として，現在活用され始めている技術として「クラウドストレージ」というものがある．クラウドストレージとは，ネットワークを活用したコンピュータの利用形態の一つであるクラウドを用いたオンラインストレージサービスのことである．その名の通り，装置として端末に接続する従来のハードディスクのストレージとは異なり，ネット上にストレージ機能を置き，保管することで低コストで必要に応じて容量を増減することが可能であるため容量制限によりバックアップの所要時間が伸びるなどの心配が無い．その上，いつでもウェブ上のどこからでも保管と取り出しができ，災害対策からソフトウェアの開発，データの移行などといった企業のビジネスにおいて様々な用途で活躍している．\\
+　バックアップ所要時間の問題について，最近注目されてきている AI や機械学習の技術を活用して一定量のデータが増えると自動的にバックアップを行ってくれるというシステムを構築し活用することで毎回のバックアップにかかる所要時間を減らすことができると考える．また，このシステムをクラウドストレージと一緒に利用することで円滑なバックアップとレストアの作業を行う事ができると考える．
+
+\begin{thebibliography}{9}
+\bibitem{bib:nastext}
+    阪西 敏治, 岡島 厚子, 佐藤, ㈱ウチダ人材開発センタ 著，
+    ``Get! CompTIA Network + ネットワークエンジニアの必須科目 第2版,''
+    翔泳社，2016
+\bibitem{bib:santext}
+    W.Curtis Preston 著，
+    ``SAN & NAS ストレージネットワーク,''
+    オーラリージャパン，2002
+\bibitem{bib:iptext}
+    竹下隆史・村山公保・荒井透・苅田幸雄 著，
+    ``マスタリング TCP/IP 入門編 第5版,''
+    株式会社 オーム社，2004．
+\bibitem{bib:santext}
+    EMC Education Services 著，
+    ``IT 技術者なら知っておきたいストレージの原則と技術,''
+    株式会社インプレスジャパン，2013
+\bibitem{bib:raidtext}
+    日経バイト 編集，
+    ``パソコン技術体系 2000 アーキテクチャからインターネットまでパソコン・テクノロジのすべて,''
+    日経BP社，1997
+\bibitem{bib:servertext}
+    Rob Filckenger(ロブ・フリッケンガー) 著，
+    ``Linux サーバ Hacks プロが使うテクニック&ツール,''
+    オイラリージャパン，2003
+\end{thebibliography}
+
+\end{document}
